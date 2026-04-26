@@ -23,7 +23,31 @@ export interface BlogPost {
 }
 
 type EditorView = "write" | "preview" | "seo" | "ai" | "history";
-type AiMode = "outline" | "draft" | "rewrite" | "seo" | "social" | "translate" | "score";
+type AiIntent = "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "social_pack" | "translate_selection" | "critique";
+type PatchOperation = "replaceSelection" | "replaceContent" | "appendContent" | "updateFields" | "showOnly";
+
+interface AiSelection {
+  text: string;
+  start: number;
+  end: number;
+  before: string;
+  after: string;
+}
+
+interface AiPatch {
+  operation: PatchOperation;
+  content?: string;
+  fields?: Partial<Pick<BlogPost, "title" | "slug" | "excerpt" | "metaTitle" | "metaDescription" | "category" | "tags">>;
+}
+
+interface AiRouterResponse {
+  result?: string;
+  assistantNote?: string;
+  patch?: AiPatch;
+  warnings?: string[];
+  intent?: AiIntent;
+  error?: string;
+}
 
 interface PostVersion {
   id: string;
@@ -52,6 +76,18 @@ const btnSecondary = "px-5 py-2.5 rounded-xl bg-white/[0.05] border border-white
 const btnDanger = "px-3 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-medium transition-all";
 const labelCls = "block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2";
 const panelCls = "rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden";
+const AI_KEY_STORAGE = "blog-studio:xai-key";
+const AI_MEMORY_STORAGE = "blog-studio:ai-memory";
+const AI_ACTIONS: Array<{ intent: AiIntent; label: string; hint: string; requiresSelection?: boolean }> = [
+  { intent: "continue", label: "Viết tiếp", hint: "Nối mạch từ đoạn cuối" },
+  { intent: "rewrite_selection", label: "Biên tập đoạn chọn", hint: "Chỉ sửa phần đang bôi đen", requiresSelection: true },
+  { intent: "improve_article", label: "Sửa toàn bài", hint: "Giữ ý, làm rõ cấu trúc" },
+  { intent: "draft_from_brief", label: "Viết nháp", hint: "Dựa trên brief hiện tại" },
+  { intent: "make_outline", label: "Dàn ý", hint: "Append outline vào bài" },
+  { intent: "seo_pack", label: "SEO từ bài", hint: "Title, slug, excerpt, meta" },
+  { intent: "social_pack", label: "Caption chia sẻ", hint: "X, Facebook, Telegram" },
+  { intent: "critique", label: "Chấm điểm", hint: "Nhận xét như editor" },
+];
 
 function slugify(input: string) {
   return input
@@ -90,18 +126,6 @@ function stripMarkdown(content: string) {
   return content.replace(/!\[[^\]]*]\([^)]+\)/g, "").replace(/[#*_`>\-[\]().]/g, "").replace(/\s+/g, " ").trim();
 }
 
-function parseJsonBlock(text: string) {
-  const cleaned = text.replace(/```json|```/g, "").trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start === -1 || end === -1) return null;
-  try {
-    return JSON.parse(cleaned.slice(start, end + 1)) as Partial<BlogPost>;
-  } catch {
-    return null;
-  }
-}
-
 function draftKey(slug: string) {
   return `blog-studio-draft:${slug || "new"}`;
 }
@@ -123,14 +147,27 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
   const [originalSlug, setOriginalSlug] = useState("");
   const [view, setView] = useState<EditorView>("write");
   const [saving, setSaving] = useState(false);
-  const [aiMode, setAiMode] = useState<AiMode>("outline");
+  const [aiIntent, setAiIntent] = useState<AiIntent>("continue");
   const [aiInstruction, setAiInstruction] = useState("");
-  const [aiResult, setAiResult] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
-  const [sessionApiKey, setSessionApiKey] = useState(() => {
+  const [aiMemory, setAiMemory] = useState(() => {
     if (typeof window === "undefined") return "";
-    return window.sessionStorage.getItem("blog-studio:xai-key") || "";
+    return window.localStorage.getItem(AI_MEMORY_STORAGE) || "";
   });
+  const [aiResult, setAiResult] = useState("");
+  const [aiAssistantNote, setAiAssistantNote] = useState("");
+  const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+  const [aiPatch, setAiPatch] = useState<AiPatch | null>(null);
+  const [lastSelection, setLastSelection] = useState<AiSelection | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [storedApiKey, setStoredApiKey] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(AI_KEY_STORAGE) || "";
+  });
+  const [apiKeyDraft, setApiKeyDraft] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(AI_KEY_STORAGE) || "";
+  });
+  const [showApiKey, setShowApiKey] = useState(false);
   const [versions, setVersions] = useState<PostVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState("");
@@ -163,11 +200,19 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     };
   }, [editPost]);
 
+  const clearAiResponse = () => {
+    setAiResult("");
+    setAiAssistantNote("");
+    setAiWarnings([]);
+    setAiPatch(null);
+    setLastSelection(null);
+  };
+
   const openPost = (post: BlogPost) => {
     setOriginalSlug(post.slug);
     setEditPost(post);
     setView("write");
-    setAiResult("");
+    clearAiResponse();
     setDraftCandidate(readDraft(post.slug));
     loadVersions(post.slug);
   };
@@ -176,7 +221,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setOriginalSlug("");
     setEditPost(emptyPost());
     setView("write");
-    setAiResult("");
+    clearAiResponse();
     setDraftCandidate(readDraft(""));
     setVersions([]);
   };
@@ -186,10 +231,28 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setEditPost({ ...editPost, ...patch });
   };
 
-  const updateSessionApiKey = (value: string) => {
-    setSessionApiKey(value);
-    if (value) window.sessionStorage.setItem("blog-studio:xai-key", value);
-    else window.sessionStorage.removeItem("blog-studio:xai-key");
+  const updateAiMemory = (value: string) => {
+    setAiMemory(value);
+    if (typeof window !== "undefined") window.localStorage.setItem(AI_MEMORY_STORAGE, value);
+  };
+
+  const saveStoredApiKey = () => {
+    const key = apiKeyDraft.trim();
+    if (!key.startsWith("xai-")) {
+      showToast("xAI key phải bắt đầu bằng xai-", "error");
+      return;
+    }
+    window.localStorage.setItem(AI_KEY_STORAGE, key);
+    setStoredApiKey(key);
+    setApiKeyDraft(key);
+    showToast("Đã lưu xAI key trong admin trình duyệt này");
+  };
+
+  const deleteStoredApiKey = () => {
+    window.localStorage.removeItem(AI_KEY_STORAGE);
+    setStoredApiKey("");
+    setApiKeyDraft("");
+    showToast("Đã xoá xAI key khỏi admin trình duyệt này");
   };
 
   useEffect(() => {
@@ -294,54 +357,139 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     showToast("Đã xoá bài viết");
   };
 
-  const runAi = async () => {
+  const getEditorSelection = (): AiSelection => {
+    const content = editPost?.content || "";
+    const el = document.getElementById("blog-content") as HTMLTextAreaElement | null;
+    const rawStart = el?.selectionStart ?? content.length;
+    const rawEnd = el?.selectionEnd ?? rawStart;
+    const start = Math.max(0, Math.min(rawStart, rawEnd, content.length));
+    const end = Math.max(start, Math.min(Math.max(rawStart, rawEnd), content.length));
+    return {
+      text: content.slice(start, end),
+      start,
+      end,
+      before: content.slice(Math.max(0, start - 1400), start),
+      after: content.slice(end, end + 1400),
+    };
+  };
+
+  const runAi = async (intent: AiIntent = aiIntent) => {
     if (!editPost) return;
-    setAiLoading(true);
-    setAiResult("");
-    const res = await fetch("/api/ai/blog", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(sessionApiKey ? { "x-xai-api-key": sessionApiKey } : {}),
-      },
-      body: JSON.stringify({ mode: aiMode, instruction: aiInstruction, post: editPost }),
-    });
-    const json = await res.json();
-    setAiLoading(false);
-    if (!res.ok) {
-      showToast(json.error || "AI chưa sẵn sàng", "error");
+    const selection = getEditorSelection();
+    const action = AI_ACTIONS.find((item) => item.intent === intent);
+    if ((action?.requiresSelection || intent === "translate_selection") && !selection.text.trim()) {
+      showToast("Hãy bôi đen đoạn cần AI xử lý trong ô Markdown trước đã.", "error");
       return;
     }
-    setAiResult(json.result || "");
+
+    setAiIntent(intent);
+    setAiLoading(true);
+    setAiResult("");
+    setAiAssistantNote("");
+    setAiWarnings([]);
+    setAiPatch(null);
+    setLastSelection(selection);
+
+    try {
+      const res = await fetch("/api/ai/blog", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(storedApiKey ? { "x-xai-api-key": storedApiKey } : {}),
+        },
+        body: JSON.stringify({
+          intent,
+          instruction: aiInstruction,
+          memory: aiMemory,
+          selection,
+          post: editPost,
+        }),
+      });
+      const json = (await res.json().catch(() => ({ error: "AI trả về phản hồi không đọc được." }))) as AiRouterResponse;
+      if (!res.ok) {
+        showToast(json.error || "AI chưa sẵn sàng", "error");
+        return;
+      }
+
+      const patch = json.patch || null;
+      const fieldsText = patch?.operation === "updateFields" && patch.fields ? JSON.stringify(patch.fields, null, 2) : "";
+      setAiPatch(patch);
+      setAiAssistantNote(json.assistantNote || "");
+      setAiWarnings(Array.isArray(json.warnings) ? json.warnings.filter((warning) => typeof warning === "string") : []);
+      setAiResult(fieldsText || patch?.content || json.result || json.assistantNote || "");
+      if (json.intent) setAiIntent(json.intent);
+    } catch {
+      showToast("Không gọi được AI lúc này", "error");
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const applyAiResult = () => {
-    if (!editPost || !aiResult) return;
-    if (aiMode === "seo") {
-      const seo = parseJsonBlock(aiResult);
-      if (!seo) {
-        showToast("AI chưa trả về JSON hợp lệ", "error");
+    if (!editPost || !aiPatch) {
+      showToast("Chưa có patch AI để áp dụng", "error");
+      return;
+    }
+
+    const content = aiResult || aiPatch.content || "";
+    if ((aiPatch.operation === "replaceSelection" || aiPatch.operation === "replaceContent" || aiPatch.operation === "appendContent") && !content.trim()) {
+      showToast("Patch AI đang trống", "error");
+      return;
+    }
+
+    if (aiPatch.operation === "replaceSelection") {
+      if (!lastSelection || lastSelection.start === lastSelection.end) {
+        showToast("Không tìm thấy đoạn đã chọn để thay thế", "error");
+        return;
+      }
+      const currentSlice = editPost.content.slice(lastSelection.start, lastSelection.end);
+      if (lastSelection.text && currentSlice !== lastSelection.text) {
+        showToast("Nội dung đã đổi sau khi AI chạy. Hãy chọn đoạn và chạy lại AI.", "error");
         return;
       }
       updatePost({
-        title: seo.title || editPost.title,
-        slug: seo.slug ? slugify(seo.slug) : editPost.slug,
-        excerpt: seo.excerpt || editPost.excerpt,
-        metaTitle: seo.metaTitle || editPost.metaTitle,
-        metaDescription: seo.metaDescription || editPost.metaDescription,
-        category: seo.category || editPost.category,
-        tags: Array.isArray(seo.tags) ? seo.tags : editPost.tags,
+        content: editPost.content.slice(0, lastSelection.start) + content + editPost.content.slice(lastSelection.end),
       });
-      showToast("Đã áp dụng SEO từ AI");
+      showToast("Đã thay đoạn được chọn bằng bản AI");
       return;
     }
-    if (aiMode === "outline" || aiMode === "social" || aiMode === "score") {
-      updatePost({ content: `${editPost.content}${editPost.content ? "\n\n" : ""}${aiResult}` });
-      showToast("Đã chèn nội dung AI");
+
+    if (aiPatch.operation === "replaceContent") {
+      updatePost({ content });
+      showToast("Đã cập nhật toàn bộ nội dung bài viết");
       return;
     }
-    updatePost({ content: aiResult });
-    showToast("Đã áp dụng nội dung AI");
+
+    if (aiPatch.operation === "appendContent") {
+      updatePost({ content: [editPost.content.trimEnd(), content.trim()].filter(Boolean).join("\n\n") });
+      showToast("Đã chèn nội dung AI vào cuối bài");
+      return;
+    }
+
+    if (aiPatch.operation === "updateFields") {
+      let fields = aiPatch.fields;
+      if (aiResult.trim().startsWith("{")) {
+        try {
+          fields = JSON.parse(aiResult) as AiPatch["fields"];
+        } catch {
+          showToast("SEO patch không phải JSON hợp lệ", "error");
+          return;
+        }
+      }
+      const patch: Partial<BlogPost> = {};
+      if (typeof fields?.title === "string") patch.title = fields.title.trim();
+      if (typeof fields?.slug === "string") patch.slug = slugify(fields.slug);
+      if (typeof fields?.excerpt === "string") patch.excerpt = fields.excerpt.trim();
+      if (typeof fields?.metaTitle === "string") patch.metaTitle = fields.metaTitle.trim();
+      if (typeof fields?.metaDescription === "string") patch.metaDescription = fields.metaDescription.trim();
+      if (typeof fields?.category === "string") patch.category = fields.category.trim();
+      if (Array.isArray(fields?.tags)) patch.tags = fields.tags.map((tag) => String(tag).trim()).filter(Boolean);
+      updatePost(patch);
+      showToast("Đã áp dụng field SEO từ AI");
+      return;
+    }
+
+    showToast("Kết quả này chỉ để tham khảo, không sửa trực tiếp bài viết.");
   };
 
   if (!editPost) {
@@ -413,7 +561,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
             ["write", "Soạn thảo"],
             ["preview", "Preview"],
             ["seo", "SEO"],
-            ["ai", "xAI"],
+            ["ai", "AI setup"],
             ["history", "Lịch sử"],
           ].map(([id, label]) => (
             <button key={id} onClick={() => setView(id as EditorView)} className={`min-h-12 border-r border-white/[0.06] text-xs font-bold transition-colors last:border-r-0 ${view === id ? "bg-white/[0.06] text-white" : "text-zinc-500 hover:text-zinc-300"}`}>
@@ -550,49 +698,50 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
           {view === "ai" && (
             <div className="p-6 space-y-5">
               <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-                <p className="text-sm font-bold text-white">xAI Writing Assistant</p>
-                <p className="mt-1 text-xs leading-5 text-zinc-500">Ưu tiên dùng XAI_API_KEY trên server. Nếu Vercel của bạn chưa cấu hình được env, nhập key tạm thời bên dưới; key chỉ lưu trong session của tab trình duyệt này và chỉ gửi khi bấm Chạy xAI.</p>
-              </div>
-
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                <label className={labelCls}>xAI API key tạm thời</label>
-                <input className={inputCls} type="password" value={sessionApiKey} onChange={(event) => updateSessionApiKey(event.target.value.trim())} placeholder="xai-..." autoComplete="off" />
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] text-zinc-500">Không lưu vào database/repo. Dùng được cho tới khi đóng tab hoặc bấm xoá.</span>
-                  {sessionApiKey ? <button onClick={() => updateSessionApiKey("")} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-300">Xoá key khỏi phiên</button> : null}
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-white">AI setup</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">Các nút AI đã chuyển vào tab Soạn thảo, ngay phía trên ô Markdown, để AI bám theo bài và đoạn đang chọn.</p>
+                  </div>
+                  <button type="button" onClick={() => setView("write")} className={btnSecondary + " text-xs"}>Về trình soạn</button>
                 </div>
               </div>
 
-              <div className="grid gap-2 md:grid-cols-4">
-                {[
-                  ["outline", "Dàn ý"],
-                  ["draft", "Viết nháp"],
-                  ["rewrite", "Biên tập"],
-                  ["seo", "SEO"],
-                  ["social", "Social"],
-                  ["translate", "Dịch EN"],
-                  ["score", "Chấm điểm"],
-                ].map(([id, label]) => (
-                  <button key={id} onClick={() => setAiMode(id as AiMode)} className={`rounded-xl border px-3 py-2 text-xs font-bold transition-all ${aiMode === id ? "border-indigo-400/40 bg-indigo-500/10 text-indigo-200" : "border-white/[0.06] bg-white/[0.03] text-zinc-500 hover:text-white"}`}>
-                    {label}
-                  </button>
-                ))}
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className={labelCls}>xAI API key lưu cố định</label>
+                    <p className="text-[11px] text-zinc-500">{storedApiKey ? "Đã có key đang dùng trong admin trình duyệt này." : "Chưa lưu key. Nhập key rồi bấm Lưu/Đổi key."}</p>
+                  </div>
+                  <span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${storedApiKey ? "bg-emerald-500/10 text-emerald-300" : "bg-zinc-500/10 text-zinc-500"}`}>
+                    {storedApiKey ? "Đã lưu" : "Chưa lưu"}
+                  </span>
+                </div>
+                <input className={inputCls} type={showApiKey ? "text" : "password"} value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value.trim())} placeholder="xai-..." autoComplete="off" />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button onClick={saveStoredApiKey} className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] font-bold text-amber-100">Lưu/Đổi key</button>
+                  <button onClick={() => setShowApiKey((value) => !value)} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-300">{showApiKey ? "Ẩn key" : "Hiện key"}</button>
+                  {storedApiKey ? <button onClick={deleteStoredApiKey} className="rounded-lg bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-300">Xoá key</button> : null}
+                  <span className="text-[11px] text-zinc-500">Không lưu vào repo/database. Muốn dùng trên máy khác thì nhập lại key ở trình duyệt đó.</span>
+                </div>
               </div>
 
-              <div>
-                <label className={labelCls}>Yêu cầu thêm cho AI</label>
-                <textarea className={textareaCls} rows={4} value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} placeholder="VD: viết theo giọng thân thiện, có ví dụ cho freelancer, tránh văn phong quảng cáo..." />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button onClick={runAi} disabled={aiLoading} className={btnPrimary}>{aiLoading ? "AI đang viết..." : "Chạy xAI"}</button>
-                <button onClick={applyAiResult} disabled={!aiResult} className={btnSecondary}>Áp dụng kết quả</button>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+                <label className={labelCls}>Ghi nhớ phong cách dùng chung</label>
+                <textarea className={textareaCls} rows={5} value={aiMemory} onChange={(event) => updateAiMemory(event.target.value)} placeholder="VD: luôn giữ giọng người thật, không đổi chủ đề, ưu tiên câu ngắn, không lạm dụng buzzword..." />
+                <p className="mt-2 text-[11px] leading-5 text-zinc-500">Phần này được gửi kèm mọi lần chạy AI và lưu trong trình duyệt admin.</p>
               </div>
 
               {aiResult ? (
-                <div>
-                  <label className={labelCls}>Kết quả AI</label>
-                  <textarea className={textareaCls + " min-h-[320px] font-mono text-[13px] leading-6"} value={aiResult} onChange={(event) => setAiResult(event.target.value)} />
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+                  <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <label className={labelCls + " mb-1"}>Patch gần nhất</label>
+                      {aiAssistantNote ? <p className="text-xs text-zinc-400">{aiAssistantNote}</p> : null}
+                    </div>
+                    <button type="button" onClick={applyAiResult} disabled={!aiPatch || aiPatch.operation === "showOnly"} className={`${btnSecondary} px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50`}>Áp dụng patch</button>
+                  </div>
+                  <textarea className={textareaCls + " min-h-[260px] font-mono text-[13px] leading-6"} value={aiResult} onChange={(event) => setAiResult(event.target.value)} />
                 </div>
               ) : null}
             </div>
@@ -633,6 +782,70 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
         </div>
 
         <aside className="space-y-5">
+          {view === "write" ? (
+            <div className={panelCls}>
+              <div className="border-b border-white/[0.06] px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white">AI Copilot</h3>
+                    <p className="mt-1 text-[11px] leading-4 text-zinc-500">Bám vào bài hiện tại và đoạn đang chọn.</p>
+                  </div>
+                  <button type="button" onClick={() => setView("ai")} className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 hover:bg-white/[0.1]">Setup</button>
+                </div>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className={labelCls}>Lệnh nhanh</label>
+                  <textarea className={textareaCls} rows={3} value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} placeholder="VD: giữ giọng cá nhân, thêm ví dụ thực tế, không đổi chủ đề..." />
+                </div>
+
+                <details className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-zinc-300">Ghi nhớ phong cách</summary>
+                  <textarea className={textareaCls + " mt-3"} rows={4} value={aiMemory} onChange={(event) => updateAiMemory(event.target.value)} placeholder="VD: tiếng Việt tự nhiên, câu ngắn, ít sáo rỗng..." />
+                </details>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {AI_ACTIONS.map((action) => (
+                    <button
+                      key={action.intent}
+                      type="button"
+                      onClick={() => runAi(action.intent)}
+                      disabled={aiLoading}
+                      className={`rounded-xl border px-3 py-2 text-left transition-all ${aiIntent === action.intent ? "border-indigo-300/50 bg-indigo-500/20" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.07]"} ${aiLoading ? "opacity-60" : ""}`}
+                    >
+                      <span className="block text-[11px] font-bold text-white">{aiLoading && aiIntent === action.intent ? "Đang chạy..." : action.label}</span>
+                      <span className="mt-0.5 block text-[10px] leading-4 text-zinc-500">{action.hint}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {aiAssistantNote || aiWarnings.length > 0 || aiResult ? (
+                  <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                    {aiAssistantNote ? <p className="text-xs font-semibold leading-5 text-indigo-100">{aiAssistantNote}</p> : null}
+                    {aiWarnings.length > 0 ? (
+                      <div className="mt-2 space-y-1">
+                        {aiWarnings.map((warning) => (
+                          <p key={warning} className="text-[11px] leading-4 text-amber-200">• {warning}</p>
+                        ))}
+                      </div>
+                    ) : null}
+                    {aiResult ? (
+                      <div className="mt-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <label className={labelCls + " mb-0"}>Patch {aiPatch ? `· ${aiPatch.operation}` : ""}</label>
+                          <button type="button" onClick={applyAiResult} disabled={!aiPatch || aiPatch.operation === "showOnly"} className="rounded-lg bg-indigo-500/20 px-2.5 py-1.5 text-[11px] font-bold text-indigo-100 disabled:cursor-not-allowed disabled:opacity-50">
+                            {aiPatch?.operation === "updateFields" ? "Áp dụng" : aiPatch?.operation === "replaceSelection" ? "Thay đoạn" : aiPatch?.operation === "replaceContent" ? "Thay bài" : aiPatch?.operation === "appendContent" ? "Chèn" : "Xem"}
+                          </button>
+                        </div>
+                        <textarea className={textareaCls + " min-h-[180px] font-mono text-[12px] leading-5"} value={aiResult} onChange={(event) => setAiResult(event.target.value)} />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className={panelCls}>
             <div className="border-b border-white/[0.06] px-5 py-4">
               <h3 className="text-sm font-bold text-white">Autosave</h3>

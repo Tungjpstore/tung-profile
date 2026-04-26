@@ -10,6 +10,13 @@ interface Project { name: string; desc: string; tech: string[]; status: string; 
 interface Service { icon: string; name: string; desc: string; price: string; image?: string; href?: string }
 interface Social { name: string; href: string }
 interface Payment { bankName: string; accountNumber: string; accountHolder: string; qrImage: string }
+interface ProfileSaveResponse {
+  success?: boolean;
+  data?: ProfileData;
+  error?: string;
+  warning?: string;
+  storage?: { mode?: string; persistent?: boolean; warning?: string };
+}
 interface ProfileData {
   name: string; tagline: string; avatar: string; cover?: string; birthYear?: number; relationship?: string; hometown?: string; hobbies?: string[];
   bio: string[]; skills: string[];
@@ -125,9 +132,16 @@ export default function AdminPage() {
     setSaving(true);
     try {
       const res = await fetch("/api/profile", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (res.ok) showToast("Đã lưu thành công!");
-      else showToast("Lưu thất bại!", "error");
-    } catch { showToast("Lỗi kết nối!", "error"); }
+      const json = (await res.json().catch(() => ({}))) as ProfileSaveResponse;
+      if (res.ok) {
+        if (json.data) setData(json.data);
+        showToast(json.warning || json.storage?.warning || "Đã lưu thành công!");
+      } else {
+        showToast(json.error || "Lưu thất bại!", "error");
+      }
+    } catch {
+      showToast("Lỗi kết nối!", "error");
+    }
     setSaving(false);
   };
 

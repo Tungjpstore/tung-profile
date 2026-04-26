@@ -4,20 +4,17 @@ import { jwtVerify } from "jose";
 
 const JWT_SECRET = new TextEncoder().encode("tung-profile-secret-key-2026-change-me");
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Public routes
   if (pathname === "/admin/login" || pathname.startsWith("/api/auth/") || pathname.startsWith("/api/contact") || pathname.startsWith("/api/analytics")) {
     return NextResponse.next();
   }
 
-  // Allow GET /api/profile and /api/posts (public)
   if ((pathname === "/api/profile" || pathname === "/api/posts") && request.method === "GET") {
     return NextResponse.next();
   }
 
-  // Protected routes
   if (pathname.startsWith("/admin") || pathname.startsWith("/api/profile") || pathname.startsWith("/api/upload") || pathname.startsWith("/api/posts") || pathname.startsWith("/api/ai")) {
     const token = request.cookies.get("auth_token")?.value;
 
