@@ -18,7 +18,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected routes
-  if (pathname.startsWith("/admin") || pathname.startsWith("/api/profile") || pathname.startsWith("/api/upload") || pathname.startsWith("/api/posts")) {
+  if (pathname.startsWith("/admin") || pathname.startsWith("/api/profile") || pathname.startsWith("/api/upload") || pathname.startsWith("/api/posts") || pathname.startsWith("/api/ai")) {
     const token = request.cookies.get("auth_token")?.value;
 
     if (!token) {
@@ -38,5 +38,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/profile", "/api/upload/:path*", "/api/posts/:path*"],
+  matcher: ["/admin/:path*", "/api/profile", "/api/upload/:path*", "/api/posts/:path*", "/api/ai/:path*"],
 };

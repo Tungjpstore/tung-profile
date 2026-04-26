@@ -2,7 +2,14 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
-interface Post { slug: string; title: string; cover: string; content: string; tags: string[]; status: string; createdAt: string }
+interface Post {
+  slug: string; title: string; cover: string; content: string; tags: string[]; status: string; createdAt: string;
+  excerpt?: string; category?: string; readingMinutes?: number;
+}
+
+function cleanExcerpt(post: Post) {
+  return post.excerpt || post.content.replace(/!\[[^\]]*]\([^)]+\)/g, "").replace(/[#*_`>\-[\]().]/g, "").replace(/\s+/g, " ").trim().slice(0, 150);
+}
 
 export default function BlogPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -28,9 +35,10 @@ export default function BlogPage() {
       </header>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <div className="text-center mb-12 animate-fade-up">
-          <h1 className="text-3xl sm:text-4xl font-bold gradient-text mb-3">Blog</h1>
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Chia sẻ kiến thức & kinh nghiệm về công nghệ</p>
+        <div className="mb-10 animate-fade-up">
+          <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--accent)" }}>Bảng tin cá nhân</p>
+          <h1 className="text-3xl sm:text-4xl font-black mb-3">Blog</h1>
+          <p className="text-sm max-w-2xl leading-7" style={{ color: "var(--text-secondary)" }}>Các bài viết chia sẻ kinh nghiệm, dự án, công nghệ và cách mình xây dựng sản phẩm số.</p>
         </div>
 
         {loading ? (
@@ -47,14 +55,19 @@ export default function BlogPage() {
                 className="animate-fade-up block rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", animationDelay: `${i * 100}ms` }}>
                 {post.cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={post.cover} alt="" className="w-full h-44 object-cover group-hover:scale-[1.02] transition-transform duration-500" />
                 ) : (
                   <div className="w-full h-28 flex items-center justify-center text-3xl" style={{ background: "var(--accent-dim)" }}>📝</div>
                 )}
                 <div className="p-5">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <span className="rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wide" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>{post.category || "Chia sẻ"}</span>
+                    <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>{post.readingMinutes || Math.max(1, Math.ceil(post.content.split(/\s+/).length / 220))} phút đọc</span>
+                  </div>
                   <h2 className="text-base font-bold mb-2 group-hover:opacity-80 transition-opacity">{post.title}</h2>
                   <p className="text-sm line-clamp-2 mb-3" style={{ color: "var(--text-secondary)" }}>
-                    {post.content.replace(/[#*_`>-]/g, "").slice(0, 120)}...
+                    {cleanExcerpt(post)}...
                   </p>
                   <div className="flex items-center justify-between">
                     <div className="flex gap-2">

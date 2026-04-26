@@ -1,6 +1,8 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect, useRef, ReactNode } from "react";
+import BlogStudio from "./BlogStudio";
 
 /* ── TYPES ── */
 interface InfoItem { icon: string; label: string; value: string; green?: boolean }
@@ -71,7 +73,7 @@ function ImageUpload({ currentUrl, onUploaded }: { currentUrl: string; onUploade
   return (
     <div className="flex items-center gap-4">
       <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-white/[0.05] border border-white/[0.08] flex-shrink-0">
-        {shownPreview && <img src={shownPreview} alt="" className="w-full h-full object-cover" />}
+        {shownPreview && <Image src={shownPreview} alt="" fill sizes="80px" className="object-cover" />}
         {uploading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>}
       </div>
       <div>
@@ -87,7 +89,10 @@ function ImageUpload({ currentUrl, onUploaded }: { currentUrl: string; onUploade
 
 /* ── ADMIN PAGE ── */
 interface Msg { id: string; name: string; email: string; phone: string; message: string; read: boolean; createdAt: string }
-interface BlogPost { slug: string; title: string; cover: string; content: string; tags: string[]; status: string; createdAt: string }
+interface BlogPost {
+  slug: string; title: string; cover: string; content: string; tags: string[]; status: string; createdAt: string; updatedAt?: string;
+  excerpt?: string; category?: string; metaTitle?: string; metaDescription?: string; canonicalUrl?: string; scheduledAt?: string; readingMinutes?: number;
+}
 
 export default function AdminPage() {
   const [data, setData] = useState<ProfileData | null>(null);
@@ -545,137 +550,7 @@ export default function AdminPage() {
 
           {/* TAB: Blog */}
           {tab === "blog" && (
-            <>
-              {editPost ? (
-                <Card title={editPost.slug ? "Sửa bài viết" : "Tạo bài viết mới"}>
-                  <div className="space-y-4">
-                    {/* Title + auto-slug */}
-                    <div>
-                      <label className={labelCls}>Tiêu đề</label>
-                      <input className={inputCls} value={editPost.title} onChange={e => {
-                        const title = e.target.value;
-                        const autoSlug = !editPost.slug || editPost.slug === "" || editPost.slug === editPost.title.toLowerCase().replace(/[^a-z0-9\u00C0-\u024F]+/gi, "-").replace(/^-|-$/g, "");
-                        setEditPost({ ...editPost, title, ...(autoSlug ? { slug: title.toLowerCase().replace(/[^a-z0-9\u00C0-\u024F]+/gi, "-").replace(/^-|-$/g, "") } : {}) });
-                      }} placeholder="Tiêu đề bài viết" />
-                    </div>
-                    <div><label className={labelCls}>Slug (URL)</label><input className={inputCls} value={editPost.slug} onChange={e => setEditPost({ ...editPost, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} placeholder="tu-dong-tao-tu-tieu-de" /></div>
-
-                    {/* Cover image with upload */}
-                    <div>
-                      <label className={labelCls}>Ảnh bìa</label>
-                      <div className="flex gap-2">
-                        <input className={inputCls + " flex-1"} value={editPost.cover} onChange={e => setEditPost({ ...editPost, cover: e.target.value })} placeholder="URL ảnh hoặc upload bên cạnh" />
-                        <label className={btnSecondary + " cursor-pointer flex items-center gap-1"}>
-                          📷 Upload
-                          <input type="file" accept="image/*" className="hidden" onChange={async e => {
-                            const file = e.target.files?.[0]; if (!file) return;
-                            const fd = new FormData(); fd.append("file", file);
-                            const res = await fetch("/api/upload", { method: "POST", body: fd });
-                            const { url } = await res.json();
-                            setEditPost({ ...editPost, cover: url });
-                          }} />
-                        </label>
-                      </div>
-                      {editPost.cover && <img src={editPost.cover} alt="" className="w-full h-32 object-cover rounded-lg mt-2" />}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><label className={labelCls}>Tags (phẩy cách)</label><input className={inputCls} value={editPost.tags.join(", ")} onChange={e => setEditPost({ ...editPost, tags: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} /></div>
-                      <div><label className={labelCls}>Trạng thái</label>
-                        <div className="flex gap-2 mt-1">
-                          <button onClick={() => setEditPost({ ...editPost, status: "draft" })} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${editPost.status === "draft" ? "bg-zinc-500/20 text-zinc-300 border border-zinc-500/30" : "bg-white/[0.02] border border-white/[0.04] text-zinc-500"}`}>📝 Nháp</button>
-                          <button onClick={() => setEditPost({ ...editPost, status: "published" })} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${editPost.status === "published" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/[0.02] border border-white/[0.04] text-zinc-500"}`}>🌐 Công khai</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Markdown editor with toolbar */}
-                    <div>
-                      <label className={labelCls}>Nội dung</label>
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {[
-                          { label: "B", md: "**", tip: "Bold" },
-                          { label: "I", md: "*", tip: "Italic" },
-                          { label: "H2", md: "\n## ", tip: "Heading 2", prefix: true },
-                          { label: "H3", md: "\n### ", tip: "Heading 3", prefix: true },
-                          { label: "</>", md: "\n```\n", tip: "Code block", wrap: "\n```" },
-                          { label: "•", md: "\n- ", tip: "List item", prefix: true },
-                          { label: "🔗", md: "[", tip: "Link", wrap: "](url)" },
-                          { label: "📷", md: "![alt](", tip: "Image", wrap: ")" },
-                        ].map((btn, i) => (
-                          <button key={i} type="button" title={btn.tip} onClick={() => {
-                            const el = document.getElementById("post-content") as HTMLTextAreaElement;
-                            if (!el) return;
-                            const { selectionStart: s, selectionEnd: e } = el;
-                            const selected = editPost.content.slice(s, e);
-                            let ins: string;
-                            if (btn.prefix) ins = btn.md + selected;
-                            else if (btn.wrap) ins = btn.md + selected + btn.wrap;
-                            else ins = btn.md + selected + btn.md;
-                            const newContent = editPost.content.slice(0, s) + ins + editPost.content.slice(e);
-                            setEditPost({ ...editPost, content: newContent });
-                            setTimeout(() => { el.focus(); el.selectionStart = el.selectionEnd = s + ins.length; }, 0);
-                          }} className="px-2.5 py-1.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-xs font-mono text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-all">
-                            {btn.label}
-                          </button>
-                        ))}
-                        {/* Insert image via upload */}
-                        <label className="px-2.5 py-1.5 rounded-md bg-white/[0.04] border border-white/[0.06] text-xs font-mono text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-all cursor-pointer" title="Upload ảnh vào nội dung">
-                          ⬆️
-                          <input type="file" accept="image/*" className="hidden" onChange={async e => {
-                            const file = e.target.files?.[0]; if (!file) return;
-                            const fd = new FormData(); fd.append("file", file);
-                            const res = await fetch("/api/upload", { method: "POST", body: fd });
-                            const { url } = await res.json();
-                            const el = document.getElementById("post-content") as HTMLTextAreaElement;
-                            const pos = el?.selectionStart || editPost.content.length;
-                            const insert = `\n![${file.name}](${url})\n`;
-                            setEditPost({ ...editPost, content: editPost.content.slice(0, pos) + insert + editPost.content.slice(pos) });
-                          }} />
-                        </label>
-                      </div>
-                      <textarea id="post-content" className={textareaCls + " font-mono text-[13px]"} rows={16} value={editPost.content} onChange={e => setEditPost({ ...editPost, content: e.target.value })} placeholder="# Tiêu đề&#10;&#10;Nội dung bài viết... Sử dụng Markdown!" />
-                    </div>
-
-                    <div className="flex gap-3">
-                      <button onClick={async () => {
-                        const method = posts.find(p => p.slug === editPost.slug) ? "PUT" : "POST";
-                        const slug = editPost.slug || Date.now().toString(36);
-                        await fetch("/api/posts", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...editPost, slug }) });
-                        const updated = await fetch("/api/posts?all=true").then(r => r.json());
-                        setPosts(updated);
-                        setEditPost(null);
-                        showToast("Đã lưu bài viết!");
-                      }} className={btnPrimary}>💾 Lưu bài viết</button>
-                      <button onClick={() => setEditPost(null)} className={btnSecondary}>Huỷ</button>
-                    </div>
-                  </div>
-                </Card>
-              ) : (
-                <Card title={`Bài viết (${posts.length})`}>
-                  <div className="space-y-3">
-                    <button onClick={() => setEditPost({ slug: "", title: "", cover: "", content: "", tags: [], status: "draft", createdAt: "" })} className={btnPrimary + " w-full"}>+ Tạo bài viết mới</button>
-                    {posts.map(p => (
-                      <div key={p.slug} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] flex items-center justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-white truncate">{p.title || "(Chưa có tiêu đề)"}</p>
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${p.status === "published" ? "bg-emerald-500/10 text-emerald-400" : "bg-zinc-500/10 text-zinc-400"}`}>
-                              {p.status === "published" ? "Công khai" : "Nháp"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-500 mt-0.5">{new Date(p.createdAt).toLocaleDateString("vi-VN")}</p>
-                        </div>
-                        <div className="flex gap-2 ml-3">
-                          <button onClick={() => setEditPost(p)} className={btnSecondary + " text-xs"}>Sửa</button>
-                          <button onClick={async () => { await fetch("/api/posts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug: p.slug }) }); setPosts(posts.filter(x => x.slug !== p.slug)); }} className={btnDanger + " text-xs"}>🗑</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-            </>
+            <BlogStudio posts={posts} setPosts={setPosts} editPost={editPost} setEditPost={setEditPost} showToast={showToast} />
           )}
 
           {/* TAB: Messages */}

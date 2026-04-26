@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import Modal from "./components/ModalRedesign";
 import { ContactContent } from "./components/ModalContents";
+import { SITE_URL } from "./lib/site";
 
 interface Project {
   name: string;
@@ -167,7 +168,7 @@ export default function Home() {
 
   const paymentQr = data.payment.qrImage || `https://img.vietqr.io/image/${encodeURIComponent(data.payment.bankName)}-${data.payment.accountNumber}-compact2.png?accountName=${encodeURIComponent(data.payment.accountHolder)}`;
   const vietQrLink = `https://img.vietqr.io/image/${encodeURIComponent(data.payment.bankName)}-${data.payment.accountNumber}-compact2.png?accountName=${encodeURIComponent(data.payment.accountHolder)}`;
-  const canonicalBase = typeof window !== "undefined" ? window.location.origin : "";
+  const canonicalBase = typeof window !== "undefined" ? window.location.origin : SITE_URL;
 
   const toggleTheme = () => {
     const next = isDark ? "light" : "dark";

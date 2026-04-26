@@ -2,6 +2,20 @@
   {
     "type": "pageview",
     "label": "",
+    "date": "2026-04-26T08:17:59.252Z",
+    "device": "desktop",
+    "referrer": "http://localhost:3000/"
+  },
+  {
+    "type": "pageview",
+    "label": "",
+    "date": "2026-04-26T08:17:59.248Z",
+    "device": "desktop",
+    "referrer": "http://localhost:3000/"
+  },
+  {
+    "type": "pageview",
+    "label": "",
     "date": "2026-04-26T07:40:57.845Z",
     "device": "desktop",
     "referrer": "http://localhost:3000/"
