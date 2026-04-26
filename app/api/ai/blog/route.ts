@@ -73,15 +73,20 @@ function buildInput({ mode, instruction, post }: BlogAiRequest) {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.XAI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Chưa cấu hình XAI_API_KEY trong biến môi trường server." },
-      { status: 501 }
-    );
-  }
-
   try {
+    const sessionApiKey = request.headers.get("x-xai-api-key")?.trim() || "";
+    const apiKey = process.env.XAI_API_KEY || sessionApiKey;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Chưa có xAI key. Hãy cấu hình XAI_API_KEY trên server hoặc nhập key tạm thời trong Blog Studio." },
+        { status: 501 }
+      );
+    }
+
+    if (sessionApiKey && !sessionApiKey.startsWith("xai-")) {
+      return NextResponse.json({ error: "xAI key tạm thời không đúng định dạng." }, { status: 400 });
+    }
+
     const body = (await request.json()) as BlogAiRequest;
     if (!body.mode || !(body.mode in MODE_PROMPTS)) {
       return NextResponse.json({ error: "AI mode không hợp lệ." }, { status: 400 });
@@ -112,6 +117,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       result: extractText(payload),
       model,
+      keySource: process.env.XAI_API_KEY ? "env" : "session",
       usage: payload && typeof payload === "object" && "usage" in payload ? (payload as { usage: unknown }).usage : null,
     });
   } catch {

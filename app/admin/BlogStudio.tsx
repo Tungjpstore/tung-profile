@@ -127,6 +127,10 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
   const [aiInstruction, setAiInstruction] = useState("");
   const [aiResult, setAiResult] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [sessionApiKey, setSessionApiKey] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.sessionStorage.getItem("blog-studio:xai-key") || "";
+  });
   const [versions, setVersions] = useState<PostVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState("");
@@ -180,6 +184,12 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
   const updatePost = (patch: Partial<BlogPost>) => {
     if (!editPost) return;
     setEditPost({ ...editPost, ...patch });
+  };
+
+  const updateSessionApiKey = (value: string) => {
+    setSessionApiKey(value);
+    if (value) window.sessionStorage.setItem("blog-studio:xai-key", value);
+    else window.sessionStorage.removeItem("blog-studio:xai-key");
   };
 
   useEffect(() => {
@@ -290,7 +300,10 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setAiResult("");
     const res = await fetch("/api/ai/blog", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(sessionApiKey ? { "x-xai-api-key": sessionApiKey } : {}),
+      },
       body: JSON.stringify({ mode: aiMode, instruction: aiInstruction, post: editPost }),
     });
     const json = await res.json();
@@ -538,7 +551,16 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
             <div className="p-6 space-y-5">
               <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
                 <p className="text-sm font-bold text-white">xAI Writing Assistant</p>
-                <p className="mt-1 text-xs leading-5 text-zinc-500">AI chạy qua server route, dùng biến môi trường XAI_API_KEY. Không đưa key xuống trình duyệt.</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">Ưu tiên dùng XAI_API_KEY trên server. Nếu Vercel của bạn chưa cấu hình được env, nhập key tạm thời bên dưới; key chỉ lưu trong session của tab trình duyệt này và chỉ gửi khi bấm Chạy xAI.</p>
+              </div>
+
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <label className={labelCls}>xAI API key tạm thời</label>
+                <input className={inputCls} type="password" value={sessionApiKey} onChange={(event) => updateSessionApiKey(event.target.value.trim())} placeholder="xai-..." autoComplete="off" />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] text-zinc-500">Không lưu vào database/repo. Dùng được cho tới khi đóng tab hoặc bấm xoá.</span>
+                  {sessionApiKey ? <button onClick={() => updateSessionApiKey("")} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-300">Xoá key khỏi phiên</button> : null}
+                </div>
               </div>
 
               <div className="grid gap-2 md:grid-cols-4">
