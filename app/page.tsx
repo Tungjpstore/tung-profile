@@ -133,7 +133,7 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetch("/api/profile")
+    fetch("/api/profile", { cache: "no-store" })
       .then((r) => r.json())
       .then((profile: ProfileData) => {
         const mode = localStorage.getItem("theme-mode") || profile.theme?.mode || "dark";
@@ -146,7 +146,7 @@ export default function Home() {
         track("pageview", "");
       });
 
-    fetch("/api/posts").then((r) => r.json()).then(setPosts).catch(() => setPosts([]));
+    fetch("/api/posts", { cache: "no-store" }).then((r) => r.json()).then(setPosts).catch(() => setPosts([]));
   }, []);
 
   const profile = useMemo(() => {
@@ -198,7 +198,7 @@ export default function Home() {
       <div className="network-container">
         <section className="network-profile">
           <div className="network-cover">
-            {data.cover ? <Image src={data.cover} alt="" fill sizes="1120px" className="cover-image" /> : null}
+            {data.cover ? <Image src={`${data.cover}?v=${Date.now()}`} alt="" fill sizes="1120px" className="cover-image" unoptimized /> : null}
             <div className="cover-glass">
               <span>profile://tung-nguyen</span>
               <span>{profile.hometown}</span>
@@ -207,8 +207,8 @@ export default function Home() {
 
           <div className="network-profile-body">
             <div className="network-avatar">
-              {data.avatar && !data.avatar.includes("1777174550352") ? (
-                <Image src={data.avatar} alt={data.name} width={140} height={140} />
+              {data.avatar ? (
+                <Image src={`${data.avatar}?v=${Date.now()}`} alt={data.name} width={140} height={140} unoptimized />
               ) : (
                 <span>TN</span>
               )}

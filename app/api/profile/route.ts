@@ -79,7 +79,9 @@ async function writeData(data: unknown): Promise<StorageResult> {
 export async function GET() {
   try {
     const data = await readData();
-    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(data, {
+      headers: { "Cache-Control": "no-store, no-cache, must-revalidate" },
+    });
   } catch {
     return NextResponse.json({ error: "Không thể đọc dữ liệu" }, { status: 500 });
   }
