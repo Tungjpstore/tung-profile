@@ -35,7 +35,7 @@ export interface PostProduct {
 }
 
 type EditorView = "write" | "preview" | "seo" | "history";
-type AiIntent = "plan_article" | "draft_from_plan" | "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
+type AiIntent = "research_plan" | "longform_from_plan" | "plan_article" | "draft_from_plan" | "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
 type PatchOperation = "replaceSelection" | "replaceContent" | "appendContent" | "updateFields" | "showOnly";
 
 interface AiSelection {
@@ -69,6 +69,8 @@ interface AiRouterResponse {
   patch?: AiPatch;
   warnings?: string[];
   scenarios?: AiScenario[];
+  citations?: string[];
+  researchBrief?: string;
   intent?: AiIntent;
   error?: string;
 }
@@ -111,6 +113,7 @@ const AI_ACTIONS: Array<{ intent: AiIntent; label: string; hint: string; require
 ];
 const AI_TONES = ["Thực chiến cá nhân", "Chuyên gia rõ ràng", "Thân mật gần gũi", "Review bán hàng mềm", "Kỹ thuật chi tiết"];
 const AI_DICTIONS = ["Đơn giản dễ hiểu", "Sắc gọn ít chữ", "Tự nhiên như chia sẻ", "Chuyên nghiệp cao cấp", "Giàu cảm xúc"];
+const AI_TARGET_WORDS = [1200, 1800, 2200, 2800, 3200];
 
 function slugify(input: string) {
   return input
@@ -194,11 +197,16 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
   const [aiResult, setAiResult] = useState("");
   const [aiAssistantNote, setAiAssistantNote] = useState("");
   const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+  const [aiCitations, setAiCitations] = useState<string[]>([]);
+  const [aiResearchBrief, setAiResearchBrief] = useState("");
   const [aiPatch, setAiPatch] = useState<AiPatch | null>(null);
   const [lastSelection, setLastSelection] = useState<AiSelection | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiTone, setAiTone] = useState(AI_TONES[0]);
   const [aiDiction, setAiDiction] = useState(AI_DICTIONS[0]);
+  const [aiResearchEnabled, setAiResearchEnabled] = useState(true);
+  const [aiTargetWords, setAiTargetWords] = useState(2200);
+  const [aiAudience, setAiAudience] = useState("");
   const [aiScenarios, setAiScenarios] = useState<AiScenario[]>([]);
   const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [storedApiKey, setStoredApiKey] = useState(() => {
@@ -251,6 +259,8 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setAiResult("");
     setAiAssistantNote("");
     setAiWarnings([]);
+    setAiCitations([]);
+    setAiResearchBrief("");
     setAiPatch(null);
     setLastSelection(null);
     setAiScenarios([]);
@@ -482,7 +492,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     if (!editPost) return;
     const selection = getEditorSelection();
     const action = AI_ACTIONS.find((item) => item.intent === intent);
-    if (intent === "plan_article" && !editPost.title.trim() && !aiInstruction.trim()) {
+    if ((intent === "plan_article" || intent === "research_plan" || intent === "longform_from_plan") && !editPost.title.trim() && !aiInstruction.trim()) {
       showToast("Nhập tiêu đề hoặc brief trước để AI lên 3 hướng bài.", "error");
       return;
     }
@@ -504,9 +514,11 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setAiResult("");
     setAiAssistantNote("");
     setAiWarnings([]);
+    setAiCitations([]);
+    setAiResearchBrief("");
     setAiPatch(null);
     setLastSelection(selection);
-    if (intent === "plan_article") {
+    if (intent === "plan_article" || intent === "research_plan") {
       setAiScenarios([]);
       setSelectedScenarioId("");
     }
@@ -524,7 +536,10 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
           memory: aiMemory,
           tone: aiTone,
           diction: aiDiction,
-          scenario: intent === "draft_from_plan" ? selectedScenario : undefined,
+          researchEnabled: aiResearchEnabled,
+          targetWords: aiTargetWords,
+          audience: aiAudience,
+          scenario: intent === "draft_from_plan" || intent === "longform_from_plan" ? selectedScenario : undefined,
           selection,
           post: editPost,
         }),
@@ -540,11 +555,13 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
       setAiPatch(patch);
       setAiAssistantNote(json.assistantNote || "");
       setAiWarnings(Array.isArray(json.warnings) ? json.warnings.filter((warning) => typeof warning === "string") : []);
+      setAiCitations(Array.isArray(json.citations) ? json.citations.filter((citation) => typeof citation === "string") : []);
+      setAiResearchBrief(json.researchBrief || "");
       setAiResult(fieldsText || patch?.content || json.result || json.assistantNote || "");
       if (Array.isArray(json.scenarios) && json.scenarios.length > 0) {
         setAiScenarios(json.scenarios);
         setSelectedScenarioId(json.scenarios[0].id);
-        setAiResult("Đã tạo 3 hướng bài. Chọn một hướng bên trên rồi bấm Viết bản nháp.");
+        setAiResult(json.researchBrief || "Đã tạo 3 hướng bài. Chọn một hướng bên trên rồi bấm Viết bản nháp.");
       }
       if (json.intent) setAiIntent(json.intent);
     } catch {
@@ -584,7 +601,16 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     }
 
     if (aiPatch.operation === "replaceContent") {
-      updatePost({ content });
+      const patch: Partial<BlogPost> = { content };
+      const fields = aiPatch.fields;
+      if (typeof fields?.title === "string") patch.title = fields.title.trim();
+      if (typeof fields?.slug === "string") patch.slug = slugify(fields.slug);
+      if (typeof fields?.excerpt === "string") patch.excerpt = fields.excerpt.trim();
+      if (typeof fields?.metaTitle === "string") patch.metaTitle = fields.metaTitle.trim();
+      if (typeof fields?.metaDescription === "string") patch.metaDescription = fields.metaDescription.trim();
+      if (typeof fields?.category === "string") patch.category = fields.category.trim();
+      if (Array.isArray(fields?.tags)) patch.tags = fields.tags.map((tag) => String(tag).trim()).filter(Boolean);
+      updatePost(patch);
       showToast("Đã cập nhật toàn bộ nội dung bài viết");
       return;
     }
@@ -769,7 +795,8 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.06] pt-3">
-                    <button type="button" onClick={() => runAi("plan_article")} disabled={aiLoading} className="rounded-full bg-indigo-500/15 px-3 py-1.5 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500/25 disabled:opacity-50">AI tạo 3 hướng</button>
+                    <button type="button" onClick={() => runAi("research_plan")} disabled={aiLoading} className="rounded-full bg-indigo-500/15 px-3 py-1.5 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500/25 disabled:opacity-50">Research + 3 hướng</button>
+                    <button type="button" onClick={() => runAi("longform_from_plan")} disabled={aiLoading} className="rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50">Viết bài dài</button>
                     <button type="button" onClick={() => runAi("continue")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">Viết tiếp</button>
                     <button type="button" onClick={() => runAi("improve_article")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">Tối ưu bài</button>
                     <button type="button" onClick={() => runAi("seo_pack")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">SEO</button>
@@ -984,6 +1011,22 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                       {AI_DICTIONS.map((diction) => <option key={diction} value={diction}>{diction}</option>)}
                     </select>
                   </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className={labelCls}>Độ dài</label>
+                      <select className={inputCls} value={aiTargetWords} onChange={(event) => setAiTargetWords(Number(event.target.value))}>
+                        {AI_TARGET_WORDS.map((count) => <option key={count} value={count}>{count.toLocaleString("vi-VN")} từ</option>)}
+                      </select>
+                    </div>
+                    <label className="flex min-h-12 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-bold text-zinc-300">
+                      <input type="checkbox" checked={aiResearchEnabled} onChange={(event) => setAiResearchEnabled(event.target.checked)} />
+                      Web research
+                    </label>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Độc giả mục tiêu</label>
+                    <input className={inputCls} value={aiAudience} onChange={(event) => setAiAudience(event.target.value)} placeholder="VD: người mới làm affiliate, chủ shop nhỏ, developer freelance..." />
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/10 p-3">
@@ -991,11 +1034,19 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                   <div className="mt-3 grid gap-2">
                     <button
                       type="button"
-                      onClick={() => runAi("plan_article")}
+                      onClick={() => runAi("research_plan")}
                       disabled={aiLoading}
                       className="rounded-xl bg-indigo-500 px-3 py-2 text-left text-xs font-bold text-white transition-all hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {aiLoading && aiIntent === "plan_article" ? "Đang tạo 3 hướng..." : "1. Tạo 3 hướng bài từ tiêu đề"}
+                      {aiLoading && aiIntent === "research_plan" ? "Đang nghiên cứu nguồn..." : "1. Research + tạo 3 kịch bản"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runAi("longform_from_plan")}
+                      disabled={aiLoading}
+                      className="rounded-xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-left text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {aiLoading && aiIntent === "longform_from_plan" ? `Đang viết bài ${aiTargetWords.toLocaleString("vi-VN")} từ...` : `2. Viết bài dài có nguồn (${aiTargetWords.toLocaleString("vi-VN")} từ)`}
                     </button>
                     <button
                       type="button"
@@ -1003,7 +1054,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                       disabled={aiLoading || !selectedScenario}
                       className="rounded-xl border border-white/[0.08] bg-white/[0.06] px-3 py-2 text-left text-xs font-bold text-zinc-100 transition-all hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {aiLoading && aiIntent === "draft_from_plan" ? "Đang viết bản nháp..." : "2. Viết bản nháp theo hướng đã chọn"}
+                      {aiLoading && aiIntent === "draft_from_plan" ? "Đang viết bản nháp ngắn..." : "Viết bản nháp ngắn theo hướng đã chọn"}
                     </button>
                   </div>
                   {aiScenarios.length > 0 ? (
@@ -1053,15 +1104,33 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                   ))}
                 </div>
 
-                {aiAssistantNote || aiWarnings.length > 0 || aiResult ? (
+                {aiAssistantNote || aiWarnings.length > 0 || aiResearchBrief || aiCitations.length > 0 || aiResult ? (
                   <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
                     {aiAssistantNote ? <p className="text-xs font-semibold leading-5 text-indigo-100">{aiAssistantNote}</p> : null}
+                    {aiResearchBrief ? (
+                      <div className="mt-2 rounded-lg border border-emerald-400/10 bg-emerald-500/5 p-2">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-200">Research brief</p>
+                        <p className="mt-1 whitespace-pre-wrap text-[11px] leading-5 text-zinc-300">{aiResearchBrief}</p>
+                      </div>
+                    ) : null}
                     {aiWarnings.length > 0 ? (
                       <div className="mt-2 space-y-1">
                         {aiWarnings.map((warning) => (
                           <p key={warning} className="text-[11px] leading-4 text-amber-200">• {warning}</p>
                         ))}
                       </div>
+                    ) : null}
+                    {aiCitations.length > 0 ? (
+                      <details className="mt-2 rounded-lg border border-white/[0.06] bg-white/[0.03] p-2">
+                        <summary className="cursor-pointer text-[11px] font-bold text-zinc-300">Nguồn Grok đã tra ({aiCitations.length})</summary>
+                        <div className="mt-2 space-y-1">
+                          {aiCitations.map((citation) => (
+                            <a key={citation} href={citation} target="_blank" rel="noreferrer" className="block truncate text-[11px] text-indigo-200 hover:text-indigo-100">
+                              {citation}
+                            </a>
+                          ))}
+                        </div>
+                      </details>
                     ) : null}
                     {aiResult ? (
                       <div className="mt-3">
