@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 type BlogAiMode = "outline" | "draft" | "rewrite" | "seo" | "social" | "translate" | "score";
-type BlogAiIntent = "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "social_pack" | "translate_selection" | "critique";
+type BlogAiIntent = "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
 type PatchOperation = "replaceSelection" | "replaceContent" | "appendContent" | "updateFields" | "showOnly";
 
 interface BlogAiRequest {
@@ -25,6 +25,16 @@ interface BlogAiRequest {
     content?: string;
     tags?: string[];
     category?: string;
+    products?: Array<{
+      id?: string;
+      name?: string;
+      price?: string;
+      image?: string;
+      href?: string;
+      description?: string;
+      cta?: string;
+    }>;
+    productAngle?: string;
   };
 }
 
@@ -67,13 +77,9 @@ const INTENT_PROMPTS: Record<BlogAiIntent, { operation: PatchOperation; prompt: 
     operation: "updateFields",
     prompt: "Tạo SEO pack dựa trên bài hiện tại. Chỉ cập nhật fields: title nếu cần, slug, excerpt, metaTitle, metaDescription, tags, category. Không tạo content mới.",
   },
-  social_pack: {
-    operation: "showOnly",
-    prompt: "Tạo caption chia sẻ cho X, Facebook, Telegram, LinkedIn dựa trên bài hiện tại. Không sửa content.",
-  },
-  translate_selection: {
-    operation: "replaceSelection",
-    prompt: "Dịch selectedText sang tiếng Anh tự nhiên, giữ Markdown. Nếu không có selectedText thì dịch toàn bài và dùng replaceContent.",
+  product_pitch: {
+    operation: "appendContent",
+    prompt: "Viết một đoạn CTA/sản phẩm gắn tự nhiên vào bài dựa trên attachedProducts và productAngle. Không bịa sản phẩm, giá, link. Không biến bài thành landing page. Nếu không có sản phẩm, trả showOnly.",
   },
   critique: {
     operation: "showOnly",
@@ -88,8 +94,7 @@ const ALLOWED_OPERATIONS: Record<BlogAiIntent, PatchOperation[]> = {
   rewrite_selection: ["replaceSelection", "showOnly"],
   improve_article: ["replaceContent", "showOnly"],
   seo_pack: ["updateFields", "showOnly"],
-  social_pack: ["showOnly"],
-  translate_selection: ["replaceSelection", "showOnly"],
+  product_pitch: ["appendContent", "showOnly"],
   critique: ["showOnly"],
 };
 
@@ -131,8 +136,6 @@ function resolveIntent(body: BlogAiRequest): BlogAiIntent {
   if (mode === "draft") return "draft_from_brief";
   if (mode === "rewrite") return body.selection?.text ? "rewrite_selection" : "improve_article";
   if (mode === "seo") return "seo_pack";
-  if (mode === "social") return "social_pack";
-  if (mode === "translate") return body.selection?.text ? "translate_selection" : "improve_article";
   if (mode === "score") return "critique";
   return "continue";
 }
@@ -186,6 +189,7 @@ function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
         "Whole-article rule: khi intent là improve_article, được chỉnh toàn bài nhưng phải giữ luận điểm, bố cục chính và dữ kiện; không biến bài thành một bài khác.",
         "Draft rule: bản nháp phải đi từ title/excerpt/tags/content hiện có; nếu brief mơ hồ, hỏi lại bằng showOnly thay vì bịa.",
         "SEO rule: chỉ trả fields khi operation là updateFields; không trộn nội dung bài vào SEO fields.",
+        "Commerce rule: attachedProducts là nguồn sự thật duy nhất cho sản phẩm. Không tự thêm giá, ưu đãi, link, cam kết hoặc thông số không có trong dữ liệu. CTA phải giống bài tư vấn/review, không rẻ tiền.",
         "Safety rule: nếu thiếu thông tin quan trọng hoặc yêu cầu mâu thuẫn với bài hiện tại, trả patch.operation='showOnly' với câu hỏi/nguyên nhân ngắn.",
         "Style rule: tiếng Việt tự nhiên, chuyên nghiệp, có chất người viết, ít sáo rỗng, không văn quảng cáo nếu user không yêu cầu.",
         "Format rule: giữ Markdown hợp lệ, không lạm dụng heading, không thêm lời giải thích ngoài JSON.",
@@ -209,6 +213,8 @@ function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
           metaDescription: body.post?.metaDescription || "",
           category: body.post?.category || "",
           tags: body.post?.tags || [],
+          productAngle: body.post?.productAngle || "",
+          attachedProducts: body.post?.products || [],
           content: body.post?.content || "",
         }),
         "selectionAndCursor:",

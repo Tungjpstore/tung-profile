@@ -5,6 +5,7 @@ import Link from "next/link";
 interface Post {
   slug: string; title: string; cover: string; content: string; tags: string[]; status: string; createdAt: string;
   excerpt?: string; category?: string; readingMinutes?: number;
+  products?: Array<{ name?: string }>;
 }
 
 function cleanExcerpt(post: Post) {
@@ -63,7 +64,9 @@ export default function BlogPage() {
                 <div className="p-5">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <span className="rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wide" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>{post.category || "Chia sẻ"}</span>
-                    <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>{post.readingMinutes || Math.max(1, Math.ceil(post.content.split(/\s+/).length / 220))} phút đọc</span>
+                    <span className="text-[11px] font-bold" style={{ color: "var(--text-muted)" }}>
+                      {(post.products || []).length > 0 ? `${post.products?.length} sản phẩm · ` : ""}{post.readingMinutes || Math.max(1, Math.ceil(post.content.split(/\s+/).length / 220))} phút đọc
+                    </span>
                   </div>
                   <h2 className="text-base font-bold mb-2 group-hover:opacity-80 transition-opacity">{post.title}</h2>
                   <p className="text-sm line-clamp-2 mb-3" style={{ color: "var(--text-secondary)" }}>

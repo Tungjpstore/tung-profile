@@ -21,6 +21,18 @@ interface Post {
   canonicalUrl?: string;
   scheduledAt?: string;
   readingMinutes?: number;
+  products?: PostProduct[];
+  productAngle?: string;
+}
+
+interface PostProduct {
+  id: string;
+  name: string;
+  price: string;
+  image: string;
+  href: string;
+  description: string;
+  cta: string;
 }
 
 type Props = {
@@ -56,6 +68,20 @@ function stripMarkdown(content: string) {
 
 function normalizePost(post: Record<string, unknown>): Post {
   const content = typeof post.content === "string" ? post.content : "";
+  const products = Array.isArray(post.products)
+    ? post.products
+        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+        .map((item, index) => ({
+          id: typeof item.id === "string" && item.id.trim() ? item.id : `product-${index + 1}`,
+          name: typeof item.name === "string" ? item.name : "",
+          price: typeof item.price === "string" ? item.price : "",
+          image: typeof item.image === "string" ? item.image : "",
+          href: typeof item.href === "string" ? item.href : "",
+          description: typeof item.description === "string" ? item.description : "",
+          cta: typeof item.cta === "string" && item.cta.trim() ? item.cta : "Xem sản phẩm",
+        }))
+        .filter((item) => item.name || item.href || item.description)
+    : [];
   return {
     slug: typeof post.slug === "string" ? post.slug : "",
     title: typeof post.title === "string" ? post.title : "",
@@ -71,6 +97,8 @@ function normalizePost(post: Record<string, unknown>): Post {
     canonicalUrl: typeof post.canonicalUrl === "string" ? post.canonicalUrl : "",
     scheduledAt: typeof post.scheduledAt === "string" ? post.scheduledAt : "",
     readingMinutes: typeof post.readingMinutes === "number" ? post.readingMinutes : Math.max(1, Math.ceil(content.split(/\s+/).filter(Boolean).length / 220)),
+    products,
+    productAngle: typeof post.productAngle === "string" ? post.productAngle : "",
   };
 }
 
@@ -182,6 +210,31 @@ export default async function PostPage({ params }: Props) {
         </div>
 
         <MarkdownRenderer content={post.content} />
+
+        {(post.products || []).length > 0 ? (
+          <section className="mt-10 rounded-2xl p-5 sm:p-6" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider" style={{ color: "var(--accent)" }}>Sản phẩm liên quan</p>
+            {post.productAngle ? <p className="mb-5 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>{post.productAngle}</p> : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {(post.products || []).map((product, index) => (
+                <a key={product.id || index} href={product.href || "#"} target={product.href ? "_blank" : undefined} rel="noreferrer" className="block overflow-hidden rounded-xl transition-all hover:-translate-y-0.5" style={{ background: "color-mix(in srgb, var(--bg-card) 88%, var(--accent-dim))", border: "1px solid var(--border)" }}>
+                  {product.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={product.image} alt="" className="h-40 w-full object-cover" />
+                  ) : null}
+                  <div className="p-4">
+                    <h2 className="text-base font-bold">{product.name || "Sản phẩm"}</h2>
+                    {product.description ? <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>{product.description}</p> : null}
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <strong className="text-sm" style={{ color: "var(--accent)" }}>{product.price || "Liên hệ"}</strong>
+                      <span className="rounded-lg px-3 py-2 text-xs font-bold" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>{product.cta || "Xem sản phẩm"}</span>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <div className="mt-10 flex flex-wrap gap-2">
           {shareLinks.map(([label, href]) => (

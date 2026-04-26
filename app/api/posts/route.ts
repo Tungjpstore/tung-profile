@@ -57,6 +57,22 @@ function readingMinutes(content: string) {
   return Math.max(1, Math.ceil(words / 220));
 }
 
+function normalizeProducts(products: unknown) {
+  if (!Array.isArray(products)) return [];
+  return products
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item, index) => ({
+      id: typeof item.id === "string" && item.id.trim() ? item.id : `product-${index + 1}`,
+      name: typeof item.name === "string" ? item.name : "",
+      price: typeof item.price === "string" ? item.price : "",
+      image: typeof item.image === "string" ? item.image : "",
+      href: typeof item.href === "string" ? item.href : "",
+      description: typeof item.description === "string" ? item.description : "",
+      cta: typeof item.cta === "string" && item.cta.trim() ? item.cta : "Xem sản phẩm",
+    }))
+    .filter((item) => item.name || item.href || item.description);
+}
+
 function normalizePost(post: Record<string, unknown>) {
   const content = typeof post.content === "string" ? post.content : "";
   return {
@@ -75,6 +91,8 @@ function normalizePost(post: Record<string, unknown>) {
     createdAt: typeof post.createdAt === "string" ? post.createdAt : new Date().toISOString(),
     updatedAt: typeof post.updatedAt === "string" ? post.updatedAt : new Date().toISOString(),
     readingMinutes: readingMinutes(content),
+    products: normalizeProducts(post.products),
+    productAngle: typeof post.productAngle === "string" ? post.productAngle : "",
   };
 }
 
@@ -111,6 +129,8 @@ export async function POST(request: Request) {
       metaDescription: body.metaDescription || "",
       canonicalUrl: body.canonicalUrl || "",
       scheduledAt: body.scheduledAt || "",
+      products: body.products || [],
+      productAngle: body.productAngle || "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

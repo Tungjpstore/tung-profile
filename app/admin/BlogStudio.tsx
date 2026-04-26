@@ -20,10 +20,22 @@ export interface BlogPost {
   canonicalUrl?: string;
   scheduledAt?: string;
   readingMinutes?: number;
+  products?: PostProduct[];
+  productAngle?: string;
 }
 
-type EditorView = "write" | "preview" | "seo" | "ai" | "history";
-type AiIntent = "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "social_pack" | "translate_selection" | "critique";
+export interface PostProduct {
+  id: string;
+  name: string;
+  price: string;
+  image: string;
+  href: string;
+  description: string;
+  cta: string;
+}
+
+type EditorView = "write" | "preview" | "seo" | "history";
+type AiIntent = "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
 type PatchOperation = "replaceSelection" | "replaceContent" | "appendContent" | "updateFields" | "showOnly";
 
 interface AiSelection {
@@ -78,15 +90,13 @@ const labelCls = "block text-xs font-bold text-zinc-500 uppercase tracking-wider
 const panelCls = "rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden";
 const AI_KEY_STORAGE = "blog-studio:xai-key";
 const AI_MEMORY_STORAGE = "blog-studio:ai-memory";
-const AI_ACTIONS: Array<{ intent: AiIntent; label: string; hint: string; requiresSelection?: boolean }> = [
-  { intent: "continue", label: "Viết tiếp", hint: "Nối mạch từ đoạn cuối" },
-  { intent: "rewrite_selection", label: "Biên tập đoạn chọn", hint: "Chỉ sửa phần đang bôi đen", requiresSelection: true },
-  { intent: "improve_article", label: "Sửa toàn bài", hint: "Giữ ý, làm rõ cấu trúc" },
-  { intent: "draft_from_brief", label: "Viết nháp", hint: "Dựa trên brief hiện tại" },
-  { intent: "make_outline", label: "Dàn ý", hint: "Append outline vào bài" },
-  { intent: "seo_pack", label: "SEO từ bài", hint: "Title, slug, excerpt, meta" },
-  { intent: "social_pack", label: "Caption chia sẻ", hint: "X, Facebook, Telegram" },
-  { intent: "critique", label: "Chấm điểm", hint: "Nhận xét như editor" },
+const AI_ACTIONS: Array<{ intent: AiIntent; label: string; hint: string; requiresSelection?: boolean; primary?: boolean }> = [
+  { intent: "continue", label: "Viết tiếp", hint: "Nối tiếp đúng mạch bài", primary: true },
+  { intent: "rewrite_selection", label: "Sửa đoạn chọn", hint: "Chỉ thay phần bôi đen", requiresSelection: true },
+  { intent: "improve_article", label: "Làm gọn bài", hint: "Giữ ý, sửa cấu trúc" },
+  { intent: "draft_from_brief", label: "Viết nháp", hint: "Biến brief thành bài" },
+  { intent: "seo_pack", label: "Tối ưu SEO", hint: "Tự điền title/meta/tag" },
+  { intent: "product_pitch", label: "Gắn sản phẩm", hint: "Chèn CTA tự nhiên" },
 ];
 
 function slugify(input: string) {
@@ -115,6 +125,8 @@ function emptyPost(): BlogPost {
     canonicalUrl: "",
     scheduledAt: "",
     createdAt: new Date().toISOString(),
+    products: [],
+    productAngle: "",
   };
 }
 
@@ -128,6 +140,19 @@ function stripMarkdown(content: string) {
 
 function draftKey(slug: string) {
   return `blog-studio-draft:${slug || "new"}`;
+}
+
+function newProduct(): PostProduct {
+  const id = `product-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  return {
+    id,
+    name: "",
+    price: "",
+    image: "",
+    href: "",
+    description: "",
+    cta: "Xem sản phẩm",
+  };
 }
 
 function readDraft(slug: string): DraftSnapshot | null {
@@ -316,6 +341,30 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     else insertMarkdown("\n![", `](${json.url})\n`, file.name.replace(/\.[^.]+$/, ""));
   };
 
+  const updateProduct = (index: number, patch: Partial<PostProduct>) => {
+    if (!editPost) return;
+    const products = [...(editPost.products || [])];
+    products[index] = { ...products[index], ...patch };
+    updatePost({ products });
+  };
+
+  const addProduct = () => {
+    if (!editPost) return;
+    updatePost({ products: [...(editPost.products || []), newProduct()] });
+  };
+
+  const removeProduct = (index: number) => {
+    if (!editPost) return;
+    updatePost({ products: (editPost.products || []).filter((_, itemIndex) => itemIndex !== index) });
+  };
+
+  const insertProductMention = (product: PostProduct) => {
+    const title = product.name || "Sản phẩm";
+    const price = product.price ? ` - ${product.price}` : "";
+    const href = product.href || "#";
+    insertMarkdown(`\n> **${title}${price}**\n> ${product.description || "Mô tả ngắn về sản phẩm."}\n> [${product.cta || "Xem sản phẩm"}](${href})\n`, "", "");
+  };
+
   const savePost = async () => {
     if (!editPost) return;
     setSaving(true);
@@ -377,8 +426,12 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     if (!editPost) return;
     const selection = getEditorSelection();
     const action = AI_ACTIONS.find((item) => item.intent === intent);
-    if ((action?.requiresSelection || intent === "translate_selection") && !selection.text.trim()) {
+    if (action?.requiresSelection && !selection.text.trim()) {
       showToast("Hãy bôi đen đoạn cần AI xử lý trong ô Markdown trước đã.", "error");
+      return;
+    }
+    if (intent === "product_pitch" && !(editPost.products || []).some((product) => product.name.trim())) {
+      showToast("Hãy thêm ít nhất một sản phẩm trước khi nhờ AI gắn vào bài.", "error");
       return;
     }
 
@@ -561,7 +614,6 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
             ["write", "Soạn thảo"],
             ["preview", "Preview"],
             ["seo", "SEO"],
-            ["ai", "AI setup"],
             ["history", "Lịch sử"],
           ].map(([id, label]) => (
             <button key={id} onClick={() => setView(id as EditorView)} className={`min-h-12 border-r border-white/[0.06] text-xs font-bold transition-colors last:border-r-0 ${view === id ? "bg-white/[0.06] text-white" : "text-zinc-500 hover:text-zinc-300"}`}>
@@ -623,6 +675,55 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                 <input className={inputCls} value={editPost.tags.join(", ")} onChange={(event) => updatePost({ tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="Next.js, UI, AI" />
               </div>
 
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
+                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-white">Sản phẩm đính kèm</p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">Gắn sản phẩm vào bài như một post review/quảng cáo. Sau này mục Cửa hàng chỉ cần dùng lại cùng cấu trúc này.</p>
+                  </div>
+                  <button type="button" onClick={addProduct} className={btnSecondary + " text-xs"}>+ Thêm sản phẩm</button>
+                </div>
+
+                <div className="mb-4">
+                  <label className={labelCls}>Góc bán hàng của bài</label>
+                  <textarea
+                    className={textareaCls}
+                    rows={2}
+                    value={editPost.productAngle || ""}
+                    onChange={(event) => updatePost({ productAngle: event.target.value })}
+                    placeholder="VD: bài chia sẻ kinh nghiệm setup, sản phẩm chỉ xuất hiện như gợi ý tự nhiên ở cuối bài."
+                  />
+                </div>
+
+                {(editPost.products || []).length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-white/[0.08] p-4 text-center text-xs text-zinc-500">
+                    Chưa gắn sản phẩm nào. Bài vẫn là blog thuần, AI sẽ không bịa sản phẩm.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(editPost.products || []).map((product, index) => (
+                      <div key={product.id || index} className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-zinc-300">Sản phẩm {index + 1}</p>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => insertProductMention(product)} className="rounded-lg bg-indigo-500/15 px-2.5 py-1.5 text-[11px] font-bold text-indigo-100">Chèn vào bài</button>
+                            <button type="button" onClick={() => removeProduct(index)} className="rounded-lg bg-red-500/10 px-2.5 py-1.5 text-[11px] font-bold text-red-300">Xoá</button>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <input className={inputCls} value={product.name} onChange={(event) => updateProduct(index, { name: event.target.value })} placeholder="Tên sản phẩm" />
+                          <input className={inputCls} value={product.price} onChange={(event) => updateProduct(index, { price: event.target.value })} placeholder="Giá / ưu đãi" />
+                          <input className={inputCls} value={product.href} onChange={(event) => updateProduct(index, { href: event.target.value })} placeholder="Link mua / link chi tiết" />
+                          <input className={inputCls} value={product.image} onChange={(event) => updateProduct(index, { image: event.target.value })} placeholder="Ảnh sản phẩm" />
+                        </div>
+                        <textarea className={textareaCls + " mt-3"} rows={2} value={product.description} onChange={(event) => updateProduct(index, { description: event.target.value })} placeholder="Mô tả ngắn, lợi ích chính, đối tượng phù hợp..." />
+                        <input className={inputCls + " mt-3"} value={product.cta} onChange={(event) => updateProduct(index, { cta: event.target.value })} placeholder="CTA: Xem sản phẩm, Mua ngay..." />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className={labelCls}>Nội dung Markdown</label>
                 <div className="mb-2 flex flex-wrap gap-1">
@@ -668,6 +769,30 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                 {editPost.tags.map((tag) => <span key={tag} className="rounded-lg bg-indigo-500/10 px-2.5 py-1 text-xs font-bold text-indigo-300">{tag}</span>)}
               </div>
               <MarkdownRenderer content={editPost.content || "Nội dung preview sẽ hiển thị tại đây."} />
+              {(editPost.products || []).length > 0 ? (
+                <section className="mt-8 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5">
+                  <p className="mb-3 text-xs font-black uppercase tracking-wider text-indigo-300">Sản phẩm trong bài</p>
+                  {editPost.productAngle ? <p className="mb-4 text-xs leading-5 text-zinc-500">{editPost.productAngle}</p> : null}
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {(editPost.products || []).map((product, index) => (
+                      <a key={product.id || index} href={product.href || "#"} target={product.href ? "_blank" : undefined} rel="noreferrer" className="grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-left transition-all hover:bg-white/[0.05]">
+                        {product.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={product.image} alt="" className="h-28 w-full rounded-lg object-cover" />
+                        ) : null}
+                        <div>
+                          <p className="text-sm font-bold text-white">{product.name || "Sản phẩm"}</p>
+                          {product.description ? <p className="mt-1 text-xs leading-5 text-zinc-500">{product.description}</p> : null}
+                          <div className="mt-3 flex items-center justify-between gap-3">
+                            <strong className="text-xs text-emerald-300">{product.price || "Liên hệ"}</strong>
+                            <span className="text-xs font-bold text-indigo-200">{product.cta || "Xem sản phẩm"}</span>
+                          </div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </article>
           )}
 
@@ -692,58 +817,6 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                 <input className={inputCls} type="datetime-local" value={editPost.scheduledAt || ""} onChange={(event) => updatePost({ scheduledAt: event.target.value })} />
                 <p className="mt-1 text-[11px] text-zinc-600">Để trống nếu muốn hiển thị ngay khi trạng thái là Công khai.</p>
               </div>
-            </div>
-          )}
-
-          {view === "ai" && (
-            <div className="p-6 space-y-5">
-              <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-white">AI setup</p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">Các nút AI đã chuyển vào tab Soạn thảo, ngay phía trên ô Markdown, để AI bám theo bài và đoạn đang chọn.</p>
-                  </div>
-                  <button type="button" onClick={() => setView("write")} className={btnSecondary + " text-xs"}>Về trình soạn</button>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <label className={labelCls}>xAI API key lưu cố định</label>
-                    <p className="text-[11px] text-zinc-500">{storedApiKey ? "Đã có key đang dùng trong admin trình duyệt này." : "Chưa lưu key. Nhập key rồi bấm Lưu/Đổi key."}</p>
-                  </div>
-                  <span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${storedApiKey ? "bg-emerald-500/10 text-emerald-300" : "bg-zinc-500/10 text-zinc-500"}`}>
-                    {storedApiKey ? "Đã lưu" : "Chưa lưu"}
-                  </span>
-                </div>
-                <input className={inputCls} type={showApiKey ? "text" : "password"} value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value.trim())} placeholder="xai-..." autoComplete="off" />
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button onClick={saveStoredApiKey} className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] font-bold text-amber-100">Lưu/Đổi key</button>
-                  <button onClick={() => setShowApiKey((value) => !value)} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-300">{showApiKey ? "Ẩn key" : "Hiện key"}</button>
-                  {storedApiKey ? <button onClick={deleteStoredApiKey} className="rounded-lg bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-300">Xoá key</button> : null}
-                  <span className="text-[11px] text-zinc-500">Không lưu vào repo/database. Muốn dùng trên máy khác thì nhập lại key ở trình duyệt đó.</span>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
-                <label className={labelCls}>Ghi nhớ phong cách dùng chung</label>
-                <textarea className={textareaCls} rows={5} value={aiMemory} onChange={(event) => updateAiMemory(event.target.value)} placeholder="VD: luôn giữ giọng người thật, không đổi chủ đề, ưu tiên câu ngắn, không lạm dụng buzzword..." />
-                <p className="mt-2 text-[11px] leading-5 text-zinc-500">Phần này được gửi kèm mọi lần chạy AI và lưu trong trình duyệt admin.</p>
-              </div>
-
-              {aiResult ? (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
-                  <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <label className={labelCls + " mb-1"}>Patch gần nhất</label>
-                      {aiAssistantNote ? <p className="text-xs text-zinc-400">{aiAssistantNote}</p> : null}
-                    </div>
-                    <button type="button" onClick={applyAiResult} disabled={!aiPatch || aiPatch.operation === "showOnly"} className={`${btnSecondary} px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50`}>Áp dụng patch</button>
-                  </div>
-                  <textarea className={textareaCls + " min-h-[260px] font-mono text-[13px] leading-6"} value={aiResult} onChange={(event) => setAiResult(event.target.value)} />
-                </div>
-              ) : null}
             </div>
           )}
 
@@ -785,33 +858,43 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
           {view === "write" ? (
             <div className={panelCls}>
               <div className="border-b border-white/[0.06] px-5 py-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-sm font-bold text-white">AI Copilot</h3>
-                    <p className="mt-1 text-[11px] leading-4 text-zinc-500">Bám vào bài hiện tại và đoạn đang chọn.</p>
+                    <h3 className="text-sm font-bold text-white">AI viết cùng bài</h3>
+                    <p className="mt-1 text-[11px] leading-4 text-zinc-500">Chọn đoạn trong Markdown nếu muốn sửa đúng một đoạn.</p>
                   </div>
-                  <button type="button" onClick={() => setView("ai")} className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-bold text-zinc-300 hover:bg-white/[0.1]">Setup</button>
+                  <span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${storedApiKey ? "bg-emerald-500/10 text-emerald-300" : "bg-zinc-500/10 text-zinc-500"}`}>
+                    {storedApiKey ? "xAI ready" : "Chưa có key"}
+                  </span>
                 </div>
               </div>
               <div className="p-5 space-y-4">
                 <div>
-                  <label className={labelCls}>Lệnh nhanh</label>
+                  <label className={labelCls}>Brief / yêu cầu cho AI</label>
                   <textarea className={textareaCls} rows={3} value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} placeholder="VD: giữ giọng cá nhân, thêm ví dụ thực tế, không đổi chủ đề..." />
                 </div>
 
                 <details className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
-                  <summary className="cursor-pointer text-xs font-bold text-zinc-300">Ghi nhớ phong cách</summary>
-                  <textarea className={textareaCls + " mt-3"} rows={4} value={aiMemory} onChange={(event) => updateAiMemory(event.target.value)} placeholder="VD: tiếng Việt tự nhiên, câu ngắn, ít sáo rỗng..." />
+                  <summary className="cursor-pointer text-xs font-bold text-zinc-300">Key xAI và phong cách</summary>
+                  <div className="mt-3 space-y-3">
+                    <input className={inputCls} type={showApiKey ? "text" : "password"} value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value.trim())} placeholder="xai-..." autoComplete="off" />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={saveStoredApiKey} className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] font-bold text-amber-100">Lưu/Đổi key</button>
+                      <button type="button" onClick={() => setShowApiKey((value) => !value)} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-300">{showApiKey ? "Ẩn" : "Hiện"}</button>
+                      {storedApiKey ? <button type="button" onClick={deleteStoredApiKey} className="rounded-lg bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-300">Xoá</button> : null}
+                    </div>
+                    <textarea className={textareaCls} rows={4} value={aiMemory} onChange={(event) => updateAiMemory(event.target.value)} placeholder="VD: tiếng Việt tự nhiên, câu ngắn, ít sáo rỗng, giữ giọng cá nhân..." />
+                  </div>
                 </details>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-2">
                   {AI_ACTIONS.map((action) => (
                     <button
                       key={action.intent}
                       type="button"
                       onClick={() => runAi(action.intent)}
                       disabled={aiLoading}
-                      className={`rounded-xl border px-3 py-2 text-left transition-all ${aiIntent === action.intent ? "border-indigo-300/50 bg-indigo-500/20" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.07]"} ${aiLoading ? "opacity-60" : ""}`}
+                      className={`rounded-xl border px-3 py-2 text-left transition-all ${action.primary ? "border-indigo-300/30 bg-indigo-500/15" : aiIntent === action.intent ? "border-indigo-300/50 bg-indigo-500/20" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.07]"} ${aiLoading ? "opacity-60" : ""}`}
                     >
                       <span className="block text-[11px] font-bold text-white">{aiLoading && aiIntent === action.intent ? "Đang chạy..." : action.label}</span>
                       <span className="mt-0.5 block text-[10px] leading-4 text-zinc-500">{action.hint}</span>
