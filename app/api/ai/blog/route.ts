@@ -71,6 +71,12 @@ interface BlogAiRouterResult {
 
 const PATCH_OPERATIONS: PatchOperation[] = ["replaceSelection", "replaceContent", "appendContent", "updateFields", "showOnly"];
 const DEFAULT_QWEN_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1";
+const DEFAULT_QWEN_MODELS = {
+  flagship: "qwen3.6-plus-2026-04-02",
+  research: "qwen3.6-plus-2026-04-02",
+  fast: "qwen3.6-flash-2026-04-16",
+  fallback: "qwen3.5-plus",
+};
 
 const INTENT_PROMPTS: Record<BlogAiIntent, { operation: PatchOperation; prompt: string }> = {
   research_plan: {
@@ -223,6 +229,18 @@ function resolveIntent(body: BlogAiRequest): BlogAiIntent {
   if (mode === "seo") return "seo_pack";
   if (mode === "score") return "critique";
   return "continue";
+}
+
+function resolveQwenModel(intent: BlogAiIntent, useResearch: boolean) {
+  if (process.env.QWEN_MODEL) return process.env.QWEN_MODEL;
+  if (useResearch) return process.env.QWEN_RESEARCH_MODEL || DEFAULT_QWEN_MODELS.research;
+  if (intent === "longform_from_plan" || intent === "draft_from_plan" || intent === "draft_from_brief" || intent === "improve_article") {
+    return process.env.QWEN_LONGFORM_MODEL || DEFAULT_QWEN_MODELS.flagship;
+  }
+  if (intent === "seo_pack" || intent === "rewrite_selection" || intent === "continue" || intent === "product_pitch") {
+    return process.env.QWEN_FAST_MODEL || DEFAULT_QWEN_MODELS.fast;
+  }
+  return process.env.QWEN_FALLBACK_MODEL || DEFAULT_QWEN_MODELS.fallback;
 }
 
 function parseRouterResult(text: string, fallbackOperation: PatchOperation, allowedOperations: PatchOperation[]): BlogAiRouterResult {
@@ -389,7 +407,7 @@ export async function POST(request: Request) {
     const intentConfig = INTENT_PROMPTS[intent];
     const useResearch = body.researchEnabled !== false && (intent === "research_plan" || intent === "longform_from_plan");
 
-    const model = process.env.QWEN_MODEL || "qwen3.5-plus";
+    const model = resolveQwenModel(intent, useResearch);
     const baseUrl = (process.env.QWEN_BASE_URL || DEFAULT_QWEN_BASE_URL).replace(/\/+$/, "");
     const response = await fetch(`${baseUrl}/responses`, {
       method: "POST",

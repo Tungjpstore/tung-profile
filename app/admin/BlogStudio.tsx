@@ -75,6 +75,14 @@ interface AiRouterResponse {
   error?: string;
 }
 
+interface AiImageResponse {
+  url?: string;
+  model?: string;
+  storage?: string;
+  warning?: string;
+  error?: string;
+}
+
 interface PostVersion {
   id: string;
   savedAt: string;
@@ -202,6 +210,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
   const [aiPatch, setAiPatch] = useState<AiPatch | null>(null);
   const [lastSelection, setLastSelection] = useState<AiSelection | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiImageLoading, setAiImageLoading] = useState(false);
   const [aiTone, setAiTone] = useState(AI_TONES[0]);
   const [aiDiction, setAiDiction] = useState(AI_DICTIONS[0]);
   const [aiResearchEnabled, setAiResearchEnabled] = useState(true);
@@ -374,6 +383,41 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     }
     if (mode === "cover") updatePost({ cover: json.url });
     else insertMarkdown("\n![", `](${json.url})\n`, file.name.replace(/\.[^.]+$/, ""));
+  };
+
+  const generateAiCover = async () => {
+    if (!editPost) return;
+    if (!editPost.title.trim() && !editPost.content.trim() && !aiInstruction.trim()) {
+      showToast("Nhập tiêu đề, ý tưởng hoặc nội dung trước khi tạo ảnh bìa.", "error");
+      return;
+    }
+    setAiImageLoading(true);
+    try {
+      const res = await fetch("/api/ai/image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(storedApiKey ? { "x-qwen-api-key": storedApiKey } : {}),
+        },
+        body: JSON.stringify({
+          instruction: aiInstruction,
+          style: "premium editorial blog cover, social profile feed, cinematic realistic lighting, clean subject focus",
+          size: "2688*1536",
+          post: editPost,
+        }),
+      });
+      const json = (await res.json().catch(() => ({ error: "Qwen Image trả về phản hồi không đọc được." }))) as AiImageResponse;
+      if (!res.ok || !json.url) {
+        showToast(json.error || "Không tạo được ảnh bìa bằng Qwen", "error");
+        return;
+      }
+      updatePost({ cover: json.url });
+      showToast(json.warning || `Đã tạo ảnh bìa bằng ${json.model || "Qwen Image"}`);
+    } catch {
+      showToast("Không kết nối được Qwen Image", "error");
+    } finally {
+      setAiImageLoading(false);
+    }
   };
 
   const updateProduct = (index: number, patch: Partial<PostProduct>) => {
@@ -1083,6 +1127,14 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                       className="rounded-xl border border-white/[0.08] bg-white/[0.06] px-3 py-2 text-left text-xs font-bold text-zinc-100 transition-all hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {aiLoading && aiIntent === "draft_from_plan" ? "Đang viết nháp ngắn..." : "Viết nháp ngắn"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={generateAiCover}
+                      disabled={aiImageLoading}
+                      className="rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-left text-xs font-bold text-cyan-100 transition-all hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {aiImageLoading ? "Đang tạo ảnh bìa..." : "Tạo ảnh bìa bằng AI"}
                     </button>
                   </div>
                 </div>
