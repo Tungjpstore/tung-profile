@@ -1,123 +1,15 @@
 import type { Metadata } from "next";
-import fs from "fs";
-import path from "path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import MarkdownRenderer from "../../components/MarkdownRenderer";
 import { SITE_URL } from "../../lib/site";
-
-interface Post {
-  slug: string;
-  title: string;
-  cover: string;
-  content: string;
-  tags: string[];
-  status: string;
-  createdAt: string;
-  excerpt?: string;
-  category?: string;
-  metaTitle?: string;
-  metaDescription?: string;
-  canonicalUrl?: string;
-  scheduledAt?: string;
-  readingMinutes?: number;
-  products?: PostProduct[];
-  productAngle?: string;
-}
-
-interface PostProduct {
-  id: string;
-  name: string;
-  price: string;
-  image: string;
-  href: string;
-  description: string;
-  cta: string;
-}
+import { getPublicPost, stripMarkdown } from "../../lib/posts-store";
 
 type Props = {
   params: Promise<{ slug: string }>;
 };
 
-const POSTS_DIR = path.join(process.cwd(), "data", "posts");
-
-function slugify(input: string) {
-  return input
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/đ/g, "d")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 90);
-}
-
-function postPath(slug: string) {
-  const filePath = path.join(POSTS_DIR, `${slugify(slug)}.json`);
-  if (!filePath.startsWith(POSTS_DIR)) throw new Error("Invalid slug");
-  return filePath;
-}
-
-function stripMarkdown(content: string) {
-  return content
-    .replace(/!\[[^\]]*]\([^)]+\)/g, "")
-    .replace(/[#*_`>\-[\]().]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizePost(post: Record<string, unknown>): Post {
-  const content = typeof post.content === "string" ? post.content : "";
-  const products = Array.isArray(post.products)
-    ? post.products
-        .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
-        .map((item, index) => ({
-          id: typeof item.id === "string" && item.id.trim() ? item.id : `product-${index + 1}`,
-          name: typeof item.name === "string" ? item.name : "",
-          price: typeof item.price === "string" ? item.price : "",
-          image: typeof item.image === "string" ? item.image : "",
-          href: typeof item.href === "string" ? item.href : "",
-          description: typeof item.description === "string" ? item.description : "",
-          cta: typeof item.cta === "string" && item.cta.trim() ? item.cta : "Xem sản phẩm",
-        }))
-        .filter((item) => item.name || item.href || item.description)
-    : [];
-  return {
-    slug: typeof post.slug === "string" ? post.slug : "",
-    title: typeof post.title === "string" ? post.title : "",
-    cover: typeof post.cover === "string" ? post.cover : "",
-    content,
-    tags: Array.isArray(post.tags) ? post.tags.filter((tag): tag is string => typeof tag === "string") : [],
-    status: typeof post.status === "string" ? post.status : "draft",
-    createdAt: typeof post.createdAt === "string" ? post.createdAt : new Date().toISOString(),
-    excerpt: typeof post.excerpt === "string" ? post.excerpt : stripMarkdown(content).slice(0, 156),
-    category: typeof post.category === "string" ? post.category : "Chia sẻ",
-    metaTitle: typeof post.metaTitle === "string" ? post.metaTitle : "",
-    metaDescription: typeof post.metaDescription === "string" ? post.metaDescription : "",
-    canonicalUrl: typeof post.canonicalUrl === "string" ? post.canonicalUrl : "",
-    scheduledAt: typeof post.scheduledAt === "string" ? post.scheduledAt : "",
-    readingMinutes: typeof post.readingMinutes === "number" ? post.readingMinutes : Math.max(1, Math.ceil(content.split(/\s+/).filter(Boolean).length / 220)),
-    products,
-    productAngle: typeof post.productAngle === "string" ? post.productAngle : "",
-  };
-}
-
-function isPublicPost(post: Post) {
-  if (post.status !== "published") return false;
-  if (!post.scheduledAt) return true;
-  return new Date(post.scheduledAt).getTime() <= Date.now();
-}
-
-function getPost(slug: string) {
-  try {
-    const filePath = postPath(slug);
-    if (!fs.existsSync(filePath)) return null;
-    const post = normalizePost(JSON.parse(fs.readFileSync(filePath, "utf-8")));
-    return isPublicPost(post) ? post : null;
-  } catch {
-    return null;
-  }
-}
+export const dynamic = "force-dynamic";
 
 function absoluteUrl(url: string) {
   if (!url) return "";
@@ -130,7 +22,7 @@ function absoluteUrl(url: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPost(slug);
+  const post = await getPublicPost(slug);
   if (!post) {
     return {
       title: "Bài viết không tồn tại",
@@ -169,7 +61,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PostPage({ params }: Props) {
   const { slug } = await params;
-  const post = getPost(slug);
+  const post = await getPublicPost(slug);
   if (!post) notFound();
 
   const readTime = post.readingMinutes || Math.max(1, Math.ceil(post.content.split(/\s+/).length / 220));

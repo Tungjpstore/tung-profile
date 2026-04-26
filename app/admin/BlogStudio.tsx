@@ -389,45 +389,77 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     insertMarkdown(`\n> **${title}${price}**\n> ${product.description || "Mô tả ngắn về sản phẩm."}\n> [${product.cta || "Xem sản phẩm"}](${href})\n`, "", "");
   };
 
-  const savePost = async () => {
+  const savePost = async (forcedStatus?: "draft" | "published") => {
     if (!editPost) return;
+    const title = editPost.title.trim();
+    const content = editPost.content.trim();
+    const nextStatus = forcedStatus || editPost.status || "draft";
+    if (!title) {
+      showToast("Nhập tiêu đề trước khi lưu bài viết", "error");
+      return;
+    }
+    if (nextStatus === "published" && !content) {
+      showToast("Bài công khai cần có nội dung", "error");
+      return;
+    }
     setSaving(true);
-    const slug = editPost.slug || slugify(editPost.title) || Date.now().toString(36);
+    const slug = editPost.slug || slugify(title) || Date.now().toString(36);
     const payload = {
       ...editPost,
+      title,
       slug,
+      status: nextStatus,
       excerpt: editPost.excerpt || analysis.excerpt,
       originalSlug: originalSlug || undefined,
     };
     const method = originalSlug ? "PUT" : "POST";
-    const res = await fetch("/api/posts", {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const res = await fetch("/api/posts", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({})) as { error?: string; slug?: string; post?: BlogPost };
+      if (!res.ok) {
+        showToast(json.error || "Không lưu được bài viết", "error");
+        return;
+      }
 
-    if (!res.ok) {
-      showToast("Không lưu được bài viết", "error");
+      const updated = await fetch("/api/posts?all=true", { cache: "no-store" }).then((r) => r.json());
+      if (Array.isArray(updated)) setPosts(updated);
+      const savedSlug = json.slug || slug;
+      clearDraft(originalSlug || savedSlug);
+      setOriginalSlug(savedSlug);
+      setEditPost(json.post || { ...payload, slug: savedSlug });
+      showToast(nextStatus === "published" ? "Đã đăng bài viết" : "Đã lưu bản nháp");
+    } catch {
+      showToast("Không kết nối được API bài viết", "error");
+    } finally {
       setSaving(false);
-      return;
     }
-
-    const updated = await fetch("/api/posts?all=true").then((r) => r.json());
-    setPosts(updated);
-    clearDraft(originalSlug || slug);
-    setEditPost(null);
-    setSaving(false);
-    showToast("Đã lưu bài viết");
   };
 
   const deletePost = async (slug: string) => {
-    await fetch("/api/posts", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug }),
-    });
-    setPosts(posts.filter((post) => post.slug !== slug));
-    showToast("Đã xoá bài viết");
+    const target = posts.find((post) => post.slug === slug);
+    const ok = window.confirm(`Xoá bài "${target?.title || slug}"?`);
+    if (!ok) return;
+    try {
+      const res = await fetch("/api/posts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      });
+      const json = await res.json().catch(() => ({})) as { error?: string };
+      if (!res.ok) {
+        showToast(json.error || "Không xoá được bài viết", "error");
+        return;
+      }
+      setPosts(posts.filter((post) => post.slug !== slug));
+      if (editPost?.slug === slug) setEditPost(null);
+      showToast("Đã xoá bài viết");
+    } catch {
+      showToast("Không kết nối được API xoá bài", "error");
+    }
   };
 
   const getEditorSelection = (): AiSelection => {
@@ -647,9 +679,8 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
             <p className="text-xs text-zinc-500 mt-1">{analysis.wordCount} từ · {analysis.readTime} phút đọc · SEO {analysis.score}/100</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => updatePost({ status: "draft" })} className={`${btnSecondary} ${editPost.status === "draft" ? "border-zinc-400/40 text-white" : ""}`}>Nháp</button>
-            <button onClick={() => updatePost({ status: "published" })} className={`${btnSecondary} ${editPost.status === "published" ? "border-emerald-400/40 text-emerald-300" : ""}`}>Công khai</button>
-            <button onClick={savePost} disabled={saving} className={btnPrimary}>{saving ? "Đang lưu..." : "Lưu bài viết"}</button>
+            <button onClick={() => savePost("draft")} disabled={saving} className={btnSecondary}>{saving ? "Đang lưu..." : "Lưu nháp"}</button>
+            <button onClick={() => savePost("published")} disabled={saving} className={btnPrimary}>{saving ? "Đang đăng..." : "Đăng bài"}</button>
           </div>
         </div>
 
@@ -670,133 +701,155 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className={panelCls}>
           {view === "write" && (
-            <div className="p-6 space-y-5">
-              <div>
-                <label className={labelCls}>Tiêu đề</label>
-                <input className={inputCls + " text-lg font-bold"} value={editPost.title} onChange={(event) => {
-                  const title = event.target.value;
-                  const shouldAutoSlug = !originalSlug && (!editPost.slug || editPost.slug === slugify(editPost.title));
-                  updatePost({ title, slug: shouldAutoSlug ? slugify(title) : editPost.slug });
-                }} placeholder="VD: Cách xây dựng profile cá nhân chuyên nghiệp" />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className={labelCls}>Slug</label>
-                  <input className={inputCls} value={editPost.slug} onChange={(event) => updatePost({ slug: slugify(event.target.value) })} placeholder="duong-dan-bai-viet" />
-                </div>
-                <div>
-                  <label className={labelCls}>Danh mục</label>
-                  <input className={inputCls} value={editPost.category || ""} onChange={(event) => updatePost({ category: event.target.value })} placeholder="Chia sẻ, Kỹ thuật, Case study..." />
-                </div>
-              </div>
-
-              <div>
-                <label className={labelCls}>Ảnh bìa</label>
-                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                  <input className={inputCls} value={editPost.cover} onChange={(event) => updatePost({ cover: event.target.value })} placeholder="/uploads/cover.png hoặc https://..." />
-                  <label className={btnSecondary + " cursor-pointer text-center"}>
-                    Upload cover
-                    <input type="file" accept="image/*" className="hidden" onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) uploadImage(file, "cover");
-                    }} />
-                  </label>
-                </div>
-                {editPost.cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={editPost.cover} alt="" className="mt-3 h-48 w-full rounded-xl object-cover border border-white/[0.06]" />
-                ) : null}
-              </div>
-
-              <div>
-                <label className={labelCls}>Excerpt</label>
-                <textarea className={textareaCls} rows={3} value={editPost.excerpt || ""} onChange={(event) => updatePost({ excerpt: event.target.value })} placeholder="Một đoạn mô tả ngắn dùng cho feed, SEO và social share." />
-              </div>
-
-              <div>
-                <label className={labelCls}>Tags</label>
-                <input className={inputCls} value={editPost.tags.join(", ")} onChange={(event) => updatePost({ tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="Next.js, UI, AI" />
-              </div>
-
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4">
-                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-sm font-bold text-white">Sản phẩm đính kèm</p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">Gắn sản phẩm vào bài như một post review/quảng cáo. Sau này mục Cửa hàng chỉ cần dùng lại cùng cấu trúc này.</p>
+            <div className="p-4 sm:p-6 space-y-4">
+              <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f0f14]">
+                <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-full bg-indigo-600 text-xs font-black text-white">TN</div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white">Tùng Nguyễn</p>
+                    <p className="text-[11px] text-zinc-500">{editPost.status === "published" ? "Đang ở chế độ công khai" : "Đang ở chế độ nháp"} · {analysis.wordCount} từ</p>
                   </div>
-                  <button type="button" onClick={addProduct} className={btnSecondary + " text-xs"}>+ Thêm sản phẩm</button>
                 </div>
 
-                <div className="mb-4">
-                  <label className={labelCls}>Góc bán hàng của bài</label>
+                <div className="space-y-3 p-4">
+                  <input
+                    className="w-full border-0 bg-transparent text-xl font-black leading-tight text-white placeholder-zinc-600 outline-none"
+                    value={editPost.title}
+                    onChange={(event) => {
+                      const title = event.target.value;
+                      const shouldAutoSlug = !originalSlug && (!editPost.slug || editPost.slug === slugify(editPost.title));
+                      updatePost({ title, slug: shouldAutoSlug ? slugify(title) : editPost.slug });
+                    }}
+                    placeholder="Tiêu đề bài viết..."
+                  />
                   <textarea
-                    className={textareaCls}
-                    rows={2}
-                    value={editPost.productAngle || ""}
-                    onChange={(event) => updatePost({ productAngle: event.target.value })}
-                    placeholder="VD: bài chia sẻ kinh nghiệm setup, sản phẩm chỉ xuất hiện như gợi ý tự nhiên ở cuối bài."
+                    id="blog-content"
+                    className="min-h-[460px] w-full resize-none border-0 bg-transparent text-[15px] leading-7 text-zinc-100 placeholder-zinc-600 outline-none"
+                    value={editPost.content}
+                    onChange={(event) => updatePost({ content: event.target.value })}
+                    placeholder={"Bạn muốn chia sẻ điều gì?\n\nCó thể viết Markdown: ## tiêu đề, **đậm**, - danh sách, link..."}
                   />
                 </div>
 
-                {(editPost.products || []).length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-white/[0.08] p-4 text-center text-xs text-zinc-500">
-                    Chưa gắn sản phẩm nào. Bài vẫn là blog thuần, AI sẽ không bịa sản phẩm.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {(editPost.products || []).map((product, index) => (
-                      <div key={product.id || index} className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
-                        <div className="mb-3 flex items-center justify-between gap-2">
-                          <p className="text-xs font-bold text-zinc-300">Sản phẩm {index + 1}</p>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => insertProductMention(product)} className="rounded-lg bg-indigo-500/15 px-2.5 py-1.5 text-[11px] font-bold text-indigo-100">Chèn vào bài</button>
-                            <button type="button" onClick={() => removeProduct(index)} className="rounded-lg bg-red-500/10 px-2.5 py-1.5 text-[11px] font-bold text-red-300">Xoá</button>
-                          </div>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <input className={inputCls} value={product.name} onChange={(event) => updateProduct(index, { name: event.target.value })} placeholder="Tên sản phẩm" />
-                          <input className={inputCls} value={product.price} onChange={(event) => updateProduct(index, { price: event.target.value })} placeholder="Giá / ưu đãi" />
-                          <input className={inputCls} value={product.href} onChange={(event) => updateProduct(index, { href: event.target.value })} placeholder="Link mua / link chi tiết" />
-                          <input className={inputCls} value={product.image} onChange={(event) => updateProduct(index, { image: event.target.value })} placeholder="Ảnh sản phẩm" />
-                        </div>
-                        <textarea className={textareaCls + " mt-3"} rows={2} value={product.description} onChange={(event) => updateProduct(index, { description: event.target.value })} placeholder="Mô tả ngắn, lợi ích chính, đối tượng phù hợp..." />
-                        <input className={inputCls + " mt-3"} value={product.cta} onChange={(event) => updateProduct(index, { cta: event.target.value })} placeholder="CTA: Xem sản phẩm, Mua ngay..." />
-                      </div>
+                <div className="border-t border-white/[0.06] px-4 py-3">
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {[
+                      ["B", "**", "**", "đậm"],
+                      ["I", "*", "*", "nghiêng"],
+                      ["H2", "\n## ", "", "Tiêu đề lớn"],
+                      ["H3", "\n### ", "", "Tiêu đề nhỏ"],
+                      ["Quote", "\n> ", "", "Trích dẫn"],
+                      ["List", "\n- ", "", "mục"],
+                      ["Link", "[", "](https://)", "liên kết"],
+                      ["Code", "\n```\n", "\n```\n", "code"],
+                    ].map(([label, before, after, fallback]) => (
+                      <button key={label} type="button" onClick={() => insertMarkdown(before, after, fallback)} className="rounded-lg border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:bg-white/[0.08] hover:text-white">
+                        {label}
+                      </button>
                     ))}
+                    <label className="cursor-pointer rounded-lg border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:bg-white/[0.08] hover:text-white">
+                      Ảnh
+                      <input type="file" accept="image/*" className="hidden" onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) uploadImage(file, "content");
+                      }} />
+                    </label>
                   </div>
-                )}
-              </div>
 
-              <div>
-                <label className={labelCls}>Nội dung Markdown</label>
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {[
-                    ["B", "**", "**", "đậm"],
-                    ["I", "*", "*", "nghiêng"],
-                    ["H2", "\n## ", "", "Tiêu đề lớn"],
-                    ["H3", "\n### ", "", "Tiêu đề nhỏ"],
-                    ["Quote", "\n> ", "", "Trích dẫn"],
-                    ["Code", "\n```\n", "\n```\n", "code"],
-                    ["List", "\n- ", "", "mục"],
-                    ["Link", "[", "](https://)", "liên kết"],
-                    ["Table", "\n| Cột 1 | Cột 2 |\n| --- | --- |\n| Nội dung | Nội dung |\n", "", ""],
-                    ["Callout", "\n> [!NOTE]\n> ", "", "Ghi chú quan trọng"],
-                  ].map(([label, before, after, fallback]) => (
-                    <button key={label} type="button" onClick={() => insertMarkdown(before, after, fallback)} className="rounded-md border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:bg-white/[0.08] hover:text-white">
-                      {label}
-                    </button>
-                  ))}
-                  <label className="cursor-pointer rounded-md border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5 text-xs font-bold text-zinc-400 transition-all hover:bg-white/[0.08] hover:text-white">
-                    Image
-                    <input type="file" accept="image/*" className="hidden" onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) uploadImage(file, "content");
-                    }} />
-                  </label>
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] md:items-center">
+                    <input className={inputCls + " py-2.5"} value={editPost.category || ""} onChange={(event) => updatePost({ category: event.target.value })} placeholder="Danh mục" />
+                    <input className={inputCls + " py-2.5"} value={editPost.tags.join(", ")} onChange={(event) => updatePost({ tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} placeholder="Tags: AI, Review, Setup..." />
+                    <label className={btnSecondary + " cursor-pointer text-center"}>
+                      Cover
+                      <input type="file" accept="image/*" className="hidden" onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) uploadImage(file, "cover");
+                      }} />
+                    </label>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.06] pt-3">
+                    <button type="button" onClick={() => runAi("plan_article")} disabled={aiLoading} className="rounded-full bg-indigo-500/15 px-3 py-1.5 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500/25 disabled:opacity-50">AI tạo 3 hướng</button>
+                    <button type="button" onClick={() => runAi("continue")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">Viết tiếp</button>
+                    <button type="button" onClick={() => runAi("improve_article")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">Tối ưu bài</button>
+                    <button type="button" onClick={() => runAi("seo_pack")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">SEO</button>
+                  </div>
                 </div>
-                <textarea id="blog-content" className={textareaCls + " min-h-[520px] font-mono text-[13px] leading-6"} value={editPost.content} onChange={(event) => updatePost({ content: event.target.value })} placeholder={"## Mở đầu\n\nViết nội dung bài tại đây..."} />
-              </div>
+              </section>
+
+              {editPost.cover ? (
+                <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={editPost.cover} alt="" className="h-44 w-full object-cover" />
+                </div>
+              ) : null}
+
+              <details className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <summary className="cursor-pointer text-sm font-bold text-white">Thông tin nâng cao</summary>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className={labelCls}>Slug</label>
+                    <input className={inputCls} value={editPost.slug} onChange={(event) => updatePost({ slug: slugify(event.target.value) })} placeholder="duong-dan-bai-viet" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Ảnh bìa URL</label>
+                    <input className={inputCls} value={editPost.cover} onChange={(event) => updatePost({ cover: event.target.value })} placeholder="/uploads/cover.png hoặc https://..." />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className={labelCls}>Excerpt</label>
+                    <textarea className={textareaCls} rows={3} value={editPost.excerpt || ""} onChange={(event) => updatePost({ excerpt: event.target.value })} placeholder="Một đoạn mô tả ngắn dùng cho feed, SEO và social share." />
+                  </div>
+                </div>
+              </details>
+
+              <details className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <summary className="cursor-pointer text-sm font-bold text-white">Sản phẩm đính kèm {(editPost.products || []).length ? `(${(editPost.products || []).length})` : ""}</summary>
+                <div className="mt-4 space-y-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <p className="text-xs leading-5 text-zinc-500">Dùng cho bài review/quảng cáo mềm. AI chỉ được nhắc tới sản phẩm bạn đã nhập ở đây.</p>
+                    <button type="button" onClick={addProduct} className={btnSecondary + " text-xs"}>+ Thêm sản phẩm</button>
+                  </div>
+
+                  <div>
+                    <label className={labelCls}>Góc bán hàng của bài</label>
+                    <textarea
+                      className={textareaCls}
+                      rows={2}
+                      value={editPost.productAngle || ""}
+                      onChange={(event) => updatePost({ productAngle: event.target.value })}
+                      placeholder="VD: bài chia sẻ kinh nghiệm setup, sản phẩm chỉ xuất hiện như gợi ý tự nhiên ở cuối bài."
+                    />
+                  </div>
+
+                  {(editPost.products || []).length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-white/[0.08] p-4 text-center text-xs text-zinc-500">
+                      Chưa gắn sản phẩm nào.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(editPost.products || []).map((product, index) => (
+                        <div key={product.id || index} className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-zinc-300">Sản phẩm {index + 1}</p>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => insertProductMention(product)} className="rounded-lg bg-indigo-500/15 px-2.5 py-1.5 text-[11px] font-bold text-indigo-100">Chèn</button>
+                              <button type="button" onClick={() => removeProduct(index)} className="rounded-lg bg-red-500/10 px-2.5 py-1.5 text-[11px] font-bold text-red-300">Xoá</button>
+                            </div>
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <input className={inputCls} value={product.name} onChange={(event) => updateProduct(index, { name: event.target.value })} placeholder="Tên sản phẩm" />
+                            <input className={inputCls} value={product.price} onChange={(event) => updateProduct(index, { price: event.target.value })} placeholder="Giá / ưu đãi" />
+                            <input className={inputCls} value={product.href} onChange={(event) => updateProduct(index, { href: event.target.value })} placeholder="Link mua / link chi tiết" />
+                            <input className={inputCls} value={product.image} onChange={(event) => updateProduct(index, { image: event.target.value })} placeholder="Ảnh sản phẩm" />
+                          </div>
+                          <textarea className={textareaCls + " mt-3"} rows={2} value={product.description} onChange={(event) => updateProduct(index, { description: event.target.value })} placeholder="Mô tả ngắn, lợi ích chính, đối tượng phù hợp..." />
+                          <input className={inputCls + " mt-3"} value={product.cta} onChange={(event) => updateProduct(index, { cta: event.target.value })} placeholder="CTA: Xem sản phẩm, Mua ngay..." />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </details>
             </div>
           )}
 
