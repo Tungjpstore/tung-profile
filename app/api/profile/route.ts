@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { head, put } from "@vercel/blob";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -6,11 +7,12 @@ import path from "path";
 const DATA_PATH = path.join(process.cwd(), "data", "profile.json");
 const RUNTIME_DATA_PATH = path.join(os.tmpdir(), "tung-profile-data", "profile.json");
 const KV_KEY = process.env.PROFILE_STORE_KEY || "tung-profile:profile";
+const BLOB_PROFILE_PATH = process.env.PROFILE_BLOB_PATH || "data/profile.json";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type StorageMode = "kv" | "file" | "runtime";
+type StorageMode = "blob" | "kv" | "file" | "runtime";
 
 interface StorageResult {
   mode: StorageMode;
@@ -46,6 +48,16 @@ async function kvCommand(command: unknown[]) {
 }
 
 async function readData() {
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const blob = await head(BLOB_PROFILE_PATH);
+      const response = await fetch(blob.url, { cache: "no-store" });
+      if (response.ok) return response.json();
+    } catch {
+      // First deploy may not have a profile blob yet; fall back to bundled seed data.
+    }
+  }
+
   const kvValue = await kvCommand(["GET", KV_KEY]);
   if (typeof kvValue === "string") return JSON.parse(kvValue);
 
@@ -57,9 +69,23 @@ async function readData() {
 async function writeData(data: unknown): Promise<StorageResult> {
   const payload = JSON.stringify(data, null, 2);
 
+  if (process.env.BLOB_READ_WRITE_TOKEN) {
+    await put(BLOB_PROFILE_PATH, payload, {
+      access: "public",
+      allowOverwrite: true,
+      contentType: "application/json; charset=utf-8",
+      cacheControlMaxAge: 60,
+    });
+    return { mode: "blob", persistent: true };
+  }
+
   if (getKvConfig()) {
     await kvCommand(["SET", KV_KEY, payload]);
     return { mode: "kv", persistent: true };
+  }
+
+  if (process.env.VERCEL === "1") {
+    throw new Error("Production chưa có storage bền. Hãy tạo Vercel Blob store để có BLOB_READ_WRITE_TOKEN, hoặc thêm KV_REST_API_URL + KV_REST_API_TOKEN.");
   }
 
   try {

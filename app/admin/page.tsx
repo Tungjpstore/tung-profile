@@ -56,25 +56,44 @@ function Toast({ message, type }: { message: string; type: "success" | "error" }
 }
 
 /* ── IMAGE UPLOAD COMPONENT ── */
-function ImageUpload({ currentUrl, onUploaded }: { currentUrl: string; onUploaded: (url: string) => void }) {
+function ImageUpload({ currentUrl, onUploaded, onError }: { currentUrl: string; onUploaded: (url: string) => void; onError?: (message: string) => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [localError, setLocalError] = useState("");
   const shownPreview = preview || currentUrl;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPreview(URL.createObjectURL(file));
+    const localPreview = URL.createObjectURL(file);
+    setPreview(localPreview);
+    setLocalError("");
     setUploading(true);
     const fd = new FormData();
     fd.append("file", file);
     try {
       const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (json.url) { onUploaded(json.url); setPreview(json.url); }
-    } catch { /* ignore */ }
-    setUploading(false);
+      const json = await res.json().catch(() => ({})) as { url?: string; error?: string };
+      if (!res.ok || !json.url) {
+        const message = json.error || "Upload ảnh thất bại";
+        setPreview(null);
+        setLocalError(message);
+        onError?.(message);
+        return;
+      }
+      onUploaded(json.url);
+      setPreview(json.url);
+    } catch {
+      const message = "Không kết nối được API upload";
+      setPreview(null);
+      setLocalError(message);
+      onError?.(message);
+    } finally {
+      URL.revokeObjectURL(localPreview);
+      setUploading(false);
+      e.target.value = "";
+    }
   };
 
   return (
@@ -88,6 +107,7 @@ function ImageUpload({ currentUrl, onUploaded }: { currentUrl: string; onUploade
           {uploading ? "Đang tải..." : "📷 Chọn ảnh"}
         </button>
         <p className="text-[11px] text-zinc-600 mt-1.5">JPG, PNG, WebP — Tối đa 5MB</p>
+        {localError ? <p className="mt-1.5 max-w-xs text-[11px] leading-4 text-red-300">{localError}</p> : null}
       </div>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
     </div>
@@ -235,10 +255,10 @@ export default function AdminPage() {
           {tab === "general" && (
             <>
               <Card title="Ảnh đại diện">
-                <ImageUpload currentUrl={data.avatar} onUploaded={(url) => set("avatar", url)} />
+                <ImageUpload currentUrl={data.avatar} onUploaded={(url) => set("avatar", url)} onError={(message) => showToast(message, "error")} />
               </Card>
               <Card title="Ảnh bìa hồ sơ">
-                <ImageUpload currentUrl={data.cover || ""} onUploaded={(url) => set("cover", url)} />
+                <ImageUpload currentUrl={data.cover || ""} onUploaded={(url) => set("cover", url)} onError={(message) => showToast(message, "error")} />
               </Card>
               <Card title="Thông tin chung">
                 <div className="space-y-4">
@@ -334,7 +354,7 @@ export default function AdminPage() {
                     <div><label className={labelCls}>Liên kết dự án</label><input className={inputCls} value={p.href || ""} onChange={e => { const n = [...data.projects]; n[i] = { ...n[i], href: e.target.value }; set("projects", n); }} placeholder="https://..." /></div>
                     <div>
                       <label className={labelCls}>Ảnh dự án</label>
-                      <ImageUpload currentUrl={p.image || ""} onUploaded={(url) => { const n = [...data.projects]; n[i] = { ...n[i], image: url }; set("projects", n); }} />
+                      <ImageUpload currentUrl={p.image || ""} onUploaded={(url) => { const n = [...data.projects]; n[i] = { ...n[i], image: url }; set("projects", n); }} onError={(message) => showToast(message, "error")} />
                     </div>
                     <div className="text-right"><button onClick={() => set("projects", data.projects.filter((_, j) => j !== i))} className={btnDanger + " text-xs"}>🗑 Xoá dự án</button></div>
                   </div>
@@ -362,7 +382,7 @@ export default function AdminPage() {
                     <div><label className={labelCls}>Liên kết dịch vụ</label><input className={inputCls} value={s.href || ""} onChange={e => { const n = [...data.services]; n[i] = { ...n[i], href: e.target.value }; set("services", n); }} placeholder="https://..." /></div>
                     <div>
                       <label className={labelCls}>Ảnh dịch vụ</label>
-                      <ImageUpload currentUrl={s.image || ""} onUploaded={(url) => { const n = [...data.services]; n[i] = { ...n[i], image: url }; set("services", n); }} />
+                      <ImageUpload currentUrl={s.image || ""} onUploaded={(url) => { const n = [...data.services]; n[i] = { ...n[i], image: url }; set("services", n); }} onError={(message) => showToast(message, "error")} />
                     </div>
                   </div>
                 ))}
@@ -403,7 +423,7 @@ export default function AdminPage() {
               </Card>
               <Card title="Ảnh QR Code">
                 <div className="space-y-4">
-                  <ImageUpload currentUrl={data.payment.qrImage} onUploaded={(url) => set("payment", { ...data.payment, qrImage: url })} />
+                  <ImageUpload currentUrl={data.payment.qrImage} onUploaded={(url) => set("payment", { ...data.payment, qrImage: url })} onError={(message) => showToast(message, "error")} />
                   <div><label className={labelCls}>Hoặc nhập URL</label><input className={inputCls} value={data.payment.qrImage} onChange={e => set("payment", { ...data.payment, qrImage: e.target.value })} placeholder="https://..." /></div>
                 </div>
               </Card>
