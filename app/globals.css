@@ -78,6 +78,183 @@ body {
   overflow-x: hidden;
 }
 
+.admin-shell {
+  background:
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.15), transparent 32rem),
+    radial-gradient(circle at 80% 12%, rgba(34, 211, 238, 0.08), transparent 28rem),
+    #07070a;
+}
+
+.admin-header {
+  box-shadow: 0 14px 48px rgba(0, 0, 0, 0.18);
+}
+
+.admin-nav .sticky {
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.025);
+}
+
+.admin-card {
+  box-shadow: 0 18px 60px rgba(0,0,0,0.18);
+}
+
+.admin-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-metric {
+  min-height: 92px;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.022));
+  text-align: left;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.admin-metric:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+}
+
+.admin-metric span {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 20px;
+}
+
+.admin-metric strong {
+  display: block;
+  color: white;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.admin-metric small {
+  display: block;
+  margin-top: 6px;
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.storage-hero,
+.messenger-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.storage-hero h3 {
+  margin-top: 4px;
+  color: white;
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.storage-hero p,
+.messenger-panel p {
+  margin-top: 6px;
+  color: #71717a;
+  font-size: 13px;
+}
+
+.storage-bar {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+}
+
+.storage-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #34d399);
+}
+
+.storage-detail {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.025);
+}
+
+.storage-detail span,
+.storage-list span {
+  display: block;
+  color: #71717a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.storage-detail strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: #e4e4e7;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-list {
+  display: grid;
+  gap: 8px;
+}
+
+.storage-list div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+}
+
+.storage-list strong {
+  color: #e4e4e7;
+  font-size: 12px;
+}
+
+.messenger-panel h3 {
+  color: white;
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.messenger-panel a {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #2563eb;
+  color: white;
+  font-size: 13px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .admin-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-hero,
+  .messenger-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 ::selection { background: hsla(var(--accent-h), var(--accent-s), 55%, 0.3); color: white; }
 
 ::-webkit-scrollbar { width: 4px; }
@@ -1789,6 +1966,14 @@ html.light .gradient-text {
 .contact-form {
   display: grid;
   gap: 12px;
+}
+
+.turnstile-box {
+  min-height: 65px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 8px;
 }
 
 .success-mark {

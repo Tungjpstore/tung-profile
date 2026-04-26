@@ -1,6 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState } from "react";
+import TurnstileWidget from "./TurnstileWidget";
 
 interface ProfileData {
   name: string; tagline: string; avatar: string; bio: string[]; skills: string[];
@@ -95,7 +96,8 @@ export function PaymentContent({ data, isEn = false }: { data: ProfileData; isEn
 }
 
 export function ContactContent({ isEn, onSent }: { isEn: boolean; onSent: () => void }) {
-  const [form, setForm] = useState({ name: "", email: "", phone: "", message: "", captcha: "" });
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+  const [form, setForm] = useState({ name: "", email: "", phone: "", message: "", captcha: "", turnstileToken: "" });
   const [captcha] = useState(genCaptcha);
   const [status, setStatus] = useState<"idle"|"sending"|"sent"|"error">("idle");
   const inputCls = "w-full px-4 py-3 text-sm placeholder-zinc-500 focus:outline-none transition-all bg-[var(--bg-input)] border border-[var(--border)] focus:border-[var(--accent)]";
@@ -105,17 +107,21 @@ export function ContactContent({ isEn, onSent }: { isEn: boolean; onSent: () => 
   );
 
   return (
-    <form onSubmit={async (e) => { e.preventDefault(); if (parseInt(form.captcha) !== captcha.a) { setStatus("error"); return; } setStatus("sending"); try { const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, captcha: true }) }); if (res.ok) { setStatus("sent"); onSent(); } else setStatus("error"); } catch { setStatus("error"); } }} className="contact-form">
+    <form onSubmit={async (e) => { e.preventDefault(); if (!turnstileSiteKey && parseInt(form.captcha) !== captcha.a) { setStatus("error"); return; } if (turnstileSiteKey && !form.turnstileToken) { setStatus("error"); return; } setStatus("sending"); try { const res = await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, captcha: !turnstileSiteKey }) }); if (res.ok) { setStatus("sent"); onSent(); } else setStatus("error"); } catch { setStatus("error"); } }} className="contact-form">
       <input className={inputCls} style={{ borderRadius: 8 }} placeholder={isEn ? "Your name *" : "Tên của bạn *"} required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <input className={inputCls} style={{ borderRadius: 8 }} placeholder="Email *" type="email" required value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
         <input className={inputCls} style={{ borderRadius: 8 }} placeholder={isEn ? "Phone" : "Số điện thoại"} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
       </div>
       <textarea className={inputCls + " resize-none"} style={{ borderRadius: 8 }} rows={4} placeholder={isEn ? "Your message *" : "Nội dung tin nhắn *"} required value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} />
-      <div className="grid grid-cols-[auto_1fr] items-center gap-3">
-        <span className="text-sm font-mono font-medium whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>{captcha.q}</span>
-        <input className={inputCls} style={{ borderRadius: 8 }} placeholder={isEn ? "Answer" : "Trả lời"} required value={form.captcha} onChange={e => setForm({ ...form, captcha: e.target.value })} />
-      </div>
+      {turnstileSiteKey ? (
+        <TurnstileWidget action="contact" siteKey={turnstileSiteKey} onToken={(token) => setForm((current) => ({ ...current, turnstileToken: token }))} />
+      ) : (
+        <div className="grid grid-cols-[auto_1fr] items-center gap-3">
+          <span className="text-sm font-mono font-medium whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>{captcha.q}</span>
+          <input className={inputCls} style={{ borderRadius: 8 }} placeholder={isEn ? "Answer" : "Trả lời"} required value={form.captcha} onChange={e => setForm({ ...form, captcha: e.target.value })} />
+        </div>
+      )}
       {status === "error" && <p className="text-xs text-red-400">{isEn ? "Failed or wrong captcha." : "Gửi thất bại hoặc captcha sai."}</p>}
       <button type="submit" disabled={status === "sending"} className="w-full py-3.5 text-sm font-semibold transition-all disabled:opacity-50 text-white" style={{ background: "var(--accent)", borderRadius: 8 }}>
         {status === "sending" ? (isEn ? "Sending..." : "Đang gửi...") : (isEn ? "Send Message" : "Gửi tin nhắn")}

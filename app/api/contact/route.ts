@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { verifyTurnstileToken } from "@/app/lib/turnstile";
 
 const MSG_PATH = path.join(process.cwd(), "data", "messages.json");
 
@@ -16,12 +17,18 @@ function writeMessages(data: unknown[]) {
 // POST — visitor sends a message (public)
 export async function POST(request: Request) {
   try {
-    const { name, email, phone, message, captcha } = await request.json();
+    const { name, email, phone, message, captcha, turnstileToken } = await request.json();
 
     if (!name || !email || !message) {
       return NextResponse.json({ error: "Vui lòng điền đầy đủ thông tin" }, { status: 400 });
     }
-    if (!captcha) {
+
+    const turnstile = await verifyTurnstileToken(request, turnstileToken, "contact");
+    if (!turnstile.success) {
+      return NextResponse.json({ error: "Xác minh bảo mật thất bại" }, { status: 400 });
+    }
+
+    if (!turnstile.enabled && !captcha) {
       return NextResponse.json({ error: "Vui lòng giải captcha" }, { status: 400 });
     }
 

@@ -3,8 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import Modal from "./components/ModalRedesign";
-import { ContactContent } from "./components/ModalContents";
 import { SITE_URL } from "./lib/site";
 
 interface Project {
@@ -56,7 +54,6 @@ interface Post {
 }
 
 type TabType = "feed" | "info" | "projects" | "services" | "payment";
-type ModalType = "contact" | null;
 type IconName = "bank" | "briefcase" | "calendar" | "check" | "code" | "copy" | "external" | "heart" | "home" | "mail" | "moon" | "share" | "sun" | "user" | "wallet";
 
 const ICONS: Record<IconName, string> = {
@@ -81,8 +78,11 @@ const SOCIAL_ICONS: Record<string, string> = {
   Facebook: "M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z",
   Zalo: "M7.9 20A9 9 0 1 0 4 16.1L2 22Z",
   GitHub: "M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S9 15.65 9 16v4",
+  Telegram: "M21 4 3 11.5l6.7 2.1L12.2 20l3.4-5.1L21 4z M9.7 13.6 18.8 6",
   Email: "M4 5h16v14H4z M4 7l8 6 8-6",
 };
+
+const MESSENGER_URL = "https://m.me/vnecs";
 
 function Icon({ name, className = "" }: { name: IconName; className?: string }) {
   return (
@@ -119,7 +119,6 @@ function excerpt(markdown: string) {
 export default function Home() {
   const [data, setData] = useState<ProfileData | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [modal, setModal] = useState<ModalType>(null);
   const [activeTab, setActiveTab] = useState<TabType>("feed");
   const [isDark, setIsDark] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -157,6 +156,11 @@ export default function Home() {
     const hobbies = data?.hobbies?.length ? data.hobbies : ["Công nghệ", "AI", "Thiết kế sản phẩm"];
     return { birthYear, age, hometown, relationship, hobbies };
   }, [data]);
+
+  const openMessenger = () => {
+    track("click", "Messenger /vnecs");
+    window.open(MESSENGER_URL, "_blank", "noopener,noreferrer");
+  };
 
   if (!data) {
     return (
@@ -222,7 +226,7 @@ export default function Home() {
                 </div>
                 <p>@tungnguyen · {data.tagline}</p>
               </div>
-              <button className="profile-action primary" onClick={() => setModal("contact")}>
+              <button className="profile-action primary" onClick={openMessenger}>
                 <Icon name="mail" />
                 Nhắn tin
               </button>
@@ -356,7 +360,7 @@ export default function Home() {
                     </div>
                     <p>{service.desc}</p>
                     <div className="share-row">
-                      <button onClick={() => setModal("contact")}>Liên hệ</button>
+                      <button onClick={openMessenger}>Liên hệ</button>
                       {service.href ? <a href={service.href} target="_blank" rel="noreferrer">Chi tiết</a> : null}
                       {shareLinks(serviceUrl, service.name).slice(0, 3).map((item) => (
                         <a key={item.label} href={item.href} target="_blank" rel="noreferrer">{item.label}</a>
@@ -389,10 +393,6 @@ export default function Home() {
           )}
         </section>
       </div>
-
-      <Modal open={modal === "contact"} onClose={() => setModal(null)} title="Nhắn tin">
-        <ContactContent isEn={false} onSent={() => {}} />
-      </Modal>
     </main>
   );
 }

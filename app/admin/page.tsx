@@ -27,6 +27,22 @@ interface ProfileData {
   template?: string;
   translations?: { en?: { tagline?: string; bio?: string[] } };
 }
+interface StorageUsage {
+  mode: string;
+  persistent: boolean;
+  bucket?: string;
+  publicUrl?: string;
+  usedBytes: number;
+  usedLabel: string;
+  quotaBytes: number;
+  quotaLabel: string;
+  percent: number;
+  objectCount: number;
+  largest?: { key: string; size: number; sizeLabel: string; lastModified?: string }[];
+  updatedAt: string;
+  error?: string;
+}
+type AdminTab = "general" | "info" | "about" | "projects" | "services" | "socials" | "payment" | "storage" | "messages" | "theme" | "stats" | "blog";
 
 /* ── UI HELPERS ── */
 const inputCls = "w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50 focus:bg-white/[0.06] transition-all";
@@ -36,11 +52,12 @@ const btnSecondary = "px-5 py-2.5 rounded-xl bg-white/[0.05] border border-white
 const btnDanger = "px-3 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-medium transition-all";
 const labelCls = "block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2";
 
-function Card({ title, children }: { title: string; children: ReactNode }) {
+function Card({ title, children, eyebrow }: { title: string; children: ReactNode; eyebrow?: string }) {
   return (
-    <div className="rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
-      <div className="px-6 py-4 border-b border-white/[0.06]">
+    <div className="admin-card rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden">
+      <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between gap-3">
         <h2 className="text-sm font-bold text-white">{title}</h2>
+        {eyebrow ? <span className="text-[11px] font-semibold text-zinc-500">{eyebrow}</span> : null}
       </div>
       <div className="p-6">{children}</div>
     </div>
@@ -126,9 +143,10 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [tab, setTab] = useState<"general" | "info" | "about" | "projects" | "services" | "socials" | "payment" | "messages" | "theme" | "stats" | "blog">("general");
+  const [tab, setTab] = useState<AdminTab>("general");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [stats, setStats] = useState<{ totalViews: number; totalClicks: number; totalEvents: number; mobile: number; desktop: number; dates: [string,number][]; topClicks: [string,number][] } | null>(null);
+  const [storage, setStorage] = useState<StorageUsage | null>(null);
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [editPost, setEditPost] = useState<BlogPost | null>(null);
 
@@ -137,6 +155,7 @@ export default function AdminPage() {
     fetch("/api/profile").then(r => r.json()).then(d => { setData(d); setLoading(false); });
     fetch("/api/contact").then(r => r.json()).then(setMessages).catch(() => {});
     fetch("/api/analytics?days=30").then(r => r.json()).then(setStats).catch(() => {});
+    fetch("/api/storage").then(r => r.json()).then(setStorage).catch(() => {});
     fetch("/api/posts?all=true").then(r => r.json()).then(setPosts).catch(() => {});
   }, []);
 
@@ -167,6 +186,7 @@ export default function AdminPage() {
 
   // Update helpers
   const set = (key: keyof ProfileData, val: unknown) => setData(d => d ? { ...d, [key]: val } : d);
+  const refreshStorage = () => fetch("/api/storage").then(r => r.json()).then(setStorage).catch(() => showToast("Không đọc được dung lượng R2", "error"));
 
   if (loading || !data) return (
     <main className="min-h-screen flex items-center justify-center bg-[#07070a]">
@@ -199,6 +219,7 @@ export default function AdminPage() {
     { id: "services" as const, label: "Dịch vụ", icon: "✨" },
     { id: "socials" as const, label: "Mạng xã hội", icon: "🔗" },
     { id: "payment" as const, label: "Thanh toán", icon: "💳" },
+    { id: "storage" as const, label: "Lưu trữ", icon: "☁️" },
     { id: "theme" as const, label: "Giao diện", icon: "🎨" },
     { id: "blog" as const, label: "Bài viết", icon: "📝" },
     { id: "stats" as const, label: "Thống kê", icon: "📊" },
@@ -206,10 +227,10 @@ export default function AdminPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#07070a] text-white">
+    <main className="admin-shell min-h-screen bg-[#07070a] text-white">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-[#07070a]/80 backdrop-blur-2xl border-b border-white/[0.06]">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+      <header className="admin-header sticky top-0 z-40 bg-[#07070a]/80 backdrop-blur-2xl border-b border-white/[0.06]">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold">TN</Link>
             <div><p className="text-sm font-bold">Quản trị</p><p className="text-[11px] text-zinc-500">Chỉnh sửa trang cá nhân</p></div>
@@ -225,9 +246,9 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-6 py-8 flex gap-8">
+      <div className="max-w-6xl mx-auto px-6 py-8 flex gap-8">
         {/* Sidebar */}
-        <nav className="w-52 flex-shrink-0 hidden md:block">
+        <nav className="admin-nav w-56 flex-shrink-0 hidden md:block">
           <div className="sticky top-24 space-y-1">
             {tabs.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
@@ -250,6 +271,19 @@ export default function AdminPage() {
 
         {/* Content */}
         <div className="flex-1 min-w-0 space-y-6 pb-20 md:pb-0">
+          <section className="admin-overview">
+            {[
+              { label: "Bài viết", value: posts.length, hint: "blog/studio", icon: "📝" },
+              { label: "Tin mới", value: unreadCount, hint: "messenger/admin", icon: "📩" },
+              { label: "R2", value: storage?.usedLabel || "—", hint: `${storage?.objectCount ?? 0} objects`, icon: "☁️" },
+            ].map((item) => (
+              <button key={item.label} className="admin-metric" onClick={() => item.label === "R2" ? setTab("storage") : item.label === "Tin mới" ? setTab("messages") : setTab("blog")}>
+                <span>{item.icon}</span>
+                <strong>{item.value}</strong>
+                <small>{item.label} · {item.hint}</small>
+              </button>
+            ))}
+          </section>
 
           {/* TAB: General */}
           {tab === "general" && (
@@ -399,16 +433,65 @@ export default function AdminPage() {
                   <div key={i} className="flex gap-3 items-end">
                     <div className="w-32"><label className={labelCls}>Tên</label>
                       <select className={inputCls} value={s.name} onChange={e => { const n = [...data.socials]; n[i] = { ...n[i], name: e.target.value }; set("socials", n); }}>
-                        {["Facebook", "Zalo", "GitHub", "Email", "Instagram", "TikTok", "YouTube", "LinkedIn"].map(o => <option key={o}>{o}</option>)}
+                        {["Facebook", "Telegram", "Zalo", "GitHub", "Email", "Instagram", "TikTok", "YouTube", "LinkedIn"].map(o => <option key={o}>{o}</option>)}
                       </select>
                     </div>
                     <div className="flex-1"><label className={labelCls}>Liên kết</label><input className={inputCls} value={s.href} onChange={e => { const n = [...data.socials]; n[i] = { ...n[i], href: e.target.value }; set("socials", n); }} /></div>
                     <button onClick={() => set("socials", data.socials.filter((_, j) => j !== i))} className={btnDanger}>🗑</button>
                   </div>
                 ))}
-                <button onClick={() => set("socials", [...data.socials, { name: "Facebook", href: "" }])} className={btnSecondary + " w-full"}>+ Thêm mạng xã hội</button>
+                <button onClick={() => set("socials", [...data.socials, { name: "Telegram", href: "https://t.me/" }])} className={btnSecondary + " w-full"}>+ Thêm mạng xã hội</button>
               </div>
             </Card>
+          )}
+
+          {/* TAB: Storage */}
+          {tab === "storage" && (
+            <>
+              <Card title="Cloudflare R2 Storage" eyebrow={storage?.mode === "r2" ? "Đang dùng R2" : "Chưa cấu hình R2"}>
+                {!storage ? (
+                  <div className="py-8 text-center"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto" /></div>
+                ) : storage.error ? (
+                  <p className="text-sm text-red-300">{storage.error}</p>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="storage-hero">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">Đã dùng</p>
+                        <h3>{storage.usedLabel}</h3>
+                        <p>{storage.objectCount} file trong bucket {storage.bucket || "chưa rõ"}</p>
+                      </div>
+                      <button className={btnSecondary} onClick={refreshStorage}>Làm mới</button>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs text-zinc-500 mb-2">
+                        <span>Free tier</span>
+                        <span>{storage.percent}% / {storage.quotaLabel}</span>
+                      </div>
+                      <div className="storage-bar"><span style={{ width: `${Math.max(1, Math.min(100, storage.percent))}%` }} /></div>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-3">
+                      <div className="storage-detail"><span>Public URL</span><strong>{storage.publicUrl || "Chưa bật"}</strong></div>
+                      <div className="storage-detail"><span>Cập nhật</span><strong>{new Date(storage.updatedAt).toLocaleString("vi-VN")}</strong></div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+              <Card title="File lớn nhất">
+                {!storage?.largest?.length ? (
+                  <p className="text-sm text-zinc-500 text-center py-6">Chưa có file hoặc chưa đọc được danh sách.</p>
+                ) : (
+                  <div className="storage-list">
+                    {storage.largest.map((item) => (
+                      <div key={item.key}>
+                        <span>{item.key}</span>
+                        <strong>{item.sizeLabel}</strong>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </>
           )}
 
           {/* TAB: Payment */}
@@ -589,30 +672,41 @@ export default function AdminPage() {
 
           {/* TAB: Messages */}
           {tab === "messages" && (
-            <Card title={`Tin nhắn (${messages.length})`}>
-              {messages.length === 0 ? (
-                <p className="text-sm text-zinc-500 text-center py-8">Chưa có tin nhắn nào</p>
-              ) : (
-                <div className="space-y-3">
-                  {messages.map(m => (
-                    <div key={m.id} className={`p-4 rounded-xl border transition-colors ${m.read ? "bg-white/[0.01] border-white/[0.03]" : "bg-indigo-500/[0.03] border-indigo-500/[0.08]"}`}>
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div>
-                          <p className="text-sm font-semibold text-white">{m.name} {!m.read && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-indigo-500/20 text-indigo-400">Mới</span>}</p>
-                          <p className="text-xs text-zinc-500">{m.email}{m.phone ? ` • ${m.phone}` : ""}</p>
-                        </div>
-                        <span className="text-[10px] text-zinc-600 flex-shrink-0">{new Date(m.createdAt).toLocaleDateString("vi-VN")}</span>
-                      </div>
-                      <p className="text-sm text-zinc-400 leading-relaxed mb-3">{m.message}</p>
-                      <div className="flex gap-2">
-                        {!m.read && <button onClick={() => markRead(m.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.05] text-zinc-300 hover:bg-white/[0.1] transition-colors">✓ Đã đọc</button>}
-                        <button onClick={() => deleteMsg(m.id)} className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">🗑 Xoá</button>
-                      </div>
-                    </div>
-                  ))}
+            <>
+              <Card title="Messenger trực tiếp" eyebrow="/vnecs">
+                <div className="messenger-panel">
+                  <div>
+                    <h3>Trang chính đã chuyển sang nhắn tin qua Messenger.</h3>
+                    <p>Nút “Nhắn tin” và “Liên hệ” sẽ mở trực tiếp m.me/vnecs thay vì form nội bộ.</p>
+                  </div>
+                  <a href="https://m.me/vnecs" target="_blank" rel="noreferrer">Mở Messenger</a>
                 </div>
-              )}
-            </Card>
+              </Card>
+              <Card title={`Tin nhắn form cũ (${messages.length})`}>
+                {messages.length === 0 ? (
+                  <p className="text-sm text-zinc-500 text-center py-8">Không còn tin nhắn form nội bộ.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {messages.map(m => (
+                      <div key={m.id} className={`p-4 rounded-xl border transition-colors ${m.read ? "bg-white/[0.01] border-white/[0.03]" : "bg-indigo-500/[0.03] border-indigo-500/[0.08]"}`}>
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{m.name} {!m.read && <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-indigo-500/20 text-indigo-400">Mới</span>}</p>
+                            <p className="text-xs text-zinc-500">{m.email}{m.phone ? ` • ${m.phone}` : ""}</p>
+                          </div>
+                          <span className="text-[10px] text-zinc-600 flex-shrink-0">{new Date(m.createdAt).toLocaleDateString("vi-VN")}</span>
+                        </div>
+                        <p className="text-sm text-zinc-400 leading-relaxed mb-3">{m.message}</p>
+                        <div className="flex gap-2">
+                          {!m.read && <button onClick={() => markRead(m.id)} className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.05] text-zinc-300 hover:bg-white/[0.1] transition-colors">✓ Đã đọc</button>}
+                          <button onClick={() => deleteMsg(m.id)} className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors">🗑 Xoá</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </>
           )}
         </div>
       </div>
