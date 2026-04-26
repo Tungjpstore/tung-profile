@@ -102,7 +102,7 @@ const btnSecondary = "px-5 py-2.5 rounded-xl bg-white/[0.05] border border-white
 const btnDanger = "px-3 py-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm font-medium transition-all";
 const labelCls = "block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2";
 const panelCls = "rounded-2xl bg-white/[0.02] border border-white/[0.06] overflow-hidden";
-const AI_KEY_STORAGE = "blog-studio:xai-key";
+const AI_KEY_STORAGE = "blog-studio:qwen-key";
 const AI_MEMORY_STORAGE = "blog-studio:ai-memory";
 const AI_ACTIONS: Array<{ intent: AiIntent; label: string; hint: string; requiresSelection?: boolean; primary?: boolean }> = [
   { intent: "continue", label: "Viết tiếp", hint: "Nối tiếp đúng mạch bài" },
@@ -298,21 +298,21 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
 
   const saveStoredApiKey = () => {
     const key = apiKeyDraft.trim();
-    if (!key.startsWith("xai-")) {
-      showToast("xAI key phải bắt đầu bằng xai-", "error");
+    if (!key.startsWith("sk-")) {
+      showToast("Qwen/DashScope key thường bắt đầu bằng sk-", "error");
       return;
     }
     window.localStorage.setItem(AI_KEY_STORAGE, key);
     setStoredApiKey(key);
     setApiKeyDraft(key);
-    showToast("Đã lưu xAI key trong admin trình duyệt này");
+    showToast("Đã lưu Qwen key trong admin trình duyệt này");
   };
 
   const deleteStoredApiKey = () => {
     window.localStorage.removeItem(AI_KEY_STORAGE);
     setStoredApiKey("");
     setApiKeyDraft("");
-    showToast("Đã xoá xAI key khỏi admin trình duyệt này");
+    showToast("Đã xoá Qwen key khỏi admin trình duyệt này");
   };
 
   useEffect(() => {
@@ -529,7 +529,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(storedApiKey ? { "x-xai-api-key": storedApiKey } : {}),
+          ...(storedApiKey ? { "x-qwen-api-key": storedApiKey } : {}),
         },
         body: JSON.stringify({
           intent,
@@ -654,7 +654,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
         <div className="px-6 py-4 border-b border-white/[0.06] flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-sm font-bold text-white">Blog Studio</h2>
-            <p className="text-xs text-zinc-500 mt-1">Quản lý bài viết, SEO, preview và trợ lý xAI.</p>
+            <p className="text-xs text-zinc-500 mt-1">Quản lý bài viết, SEO, preview và trợ lý Qwen.</p>
           </div>
           <button onClick={newPost} className={btnPrimary}>Tạo bài viết mới</button>
         </div>
@@ -987,7 +987,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                     <p className="mt-1 text-[11px] leading-4 text-zinc-500">Chọn đoạn trong Markdown nếu muốn sửa đúng một đoạn.</p>
                   </div>
                   <span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${storedApiKey ? "bg-emerald-500/10 text-emerald-300" : "bg-zinc-500/10 text-zinc-500"}`}>
-                    {storedApiKey ? "xAI ready" : "Chưa có key"}
+                    {storedApiKey ? "Qwen ready" : "Chưa có key"}
                   </span>
                 </div>
               </div>
@@ -1090,7 +1090,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                 <details className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
                   <summary className="cursor-pointer text-xs font-bold text-zinc-300">Cài đặt AI</summary>
                   <div className="mt-3 space-y-3">
-                    <input className={inputCls} type={showApiKey ? "text" : "password"} value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value.trim())} placeholder="xai-..." autoComplete="off" />
+                    <input className={inputCls} type={showApiKey ? "text" : "password"} value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value.trim())} placeholder="sk-..." autoComplete="off" />
                     <div className="flex flex-wrap gap-2">
                       <button type="button" onClick={saveStoredApiKey} className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] font-bold text-amber-100">Lưu/Đổi key</button>
                       <button type="button" onClick={() => setShowApiKey((value) => !value)} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-300">{showApiKey ? "Ẩn" : "Hiện"}</button>
@@ -1136,7 +1136,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                     ) : null}
                     {aiCitations.length > 0 ? (
                       <details className="mt-2 rounded-lg border border-white/[0.06] bg-white/[0.03] p-2">
-                        <summary className="cursor-pointer text-[11px] font-bold text-zinc-300">Nguồn Grok đã tra ({aiCitations.length})</summary>
+                        <summary className="cursor-pointer text-[11px] font-bold text-zinc-300">Nguồn Qwen đã tra ({aiCitations.length})</summary>
                         <div className="mt-2 space-y-1">
                           {aiCitations.map((citation) => (
                             <a key={citation} href={citation} target="_blank" rel="noreferrer" className="block truncate text-[11px] text-indigo-200 hover:text-indigo-100">

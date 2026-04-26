@@ -70,6 +70,7 @@ interface BlogAiRouterResult {
 }
 
 const PATCH_OPERATIONS: PatchOperation[] = ["replaceSelection", "replaceContent", "appendContent", "updateFields", "showOnly"];
+const DEFAULT_QWEN_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1";
 
 const INTENT_PROMPTS: Record<BlogAiIntent, { operation: PatchOperation; prompt: string }> = {
   research_plan: {
@@ -172,11 +173,32 @@ function cleanScenarios(value: unknown): BlogAiScenario[] {
     }));
 }
 
+function collectUrls(value: unknown, urls: Set<string>) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectUrls(item, urls));
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  const rawUrl = record.url || record.source_url || record.uri;
+  if (typeof rawUrl === "string" && /^https?:\/\//i.test(rawUrl)) urls.add(rawUrl);
+  collectUrls(record.action, urls);
+  collectUrls(record.annotations, urls);
+  collectUrls(record.sources, urls);
+  collectUrls(record.content, urls);
+  collectUrls(record.output, urls);
+}
+
 function extractCitations(payload: unknown): string[] {
-  if (!payload || typeof payload !== "object") return [];
-  const data = payload as { citations?: unknown };
-  if (!Array.isArray(data.citations)) return [];
-  return data.citations.filter((item): item is string => typeof item === "string").slice(0, 20);
+  const urls = new Set<string>();
+  if (payload && typeof payload === "object") {
+    const data = payload as { citations?: unknown };
+    if (Array.isArray(data.citations)) {
+      data.citations.filter((item): item is string => typeof item === "string").forEach((item) => urls.add(item));
+    }
+  }
+  collectUrls(payload, urls);
+  return Array.from(urls).slice(0, 20);
 }
 
 function extractText(payload: unknown): string {
@@ -349,17 +371,17 @@ function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
 
 export async function POST(request: Request) {
   try {
-    const sessionApiKey = request.headers.get("x-xai-api-key")?.trim() || "";
-    const apiKey = process.env.XAI_API_KEY || sessionApiKey;
+    const sessionApiKey = request.headers.get("x-qwen-api-key")?.trim() || "";
+    const apiKey = process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY || sessionApiKey;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "Chưa có xAI key. Hãy cấu hình XAI_API_KEY trên server hoặc nhập key tạm thời trong Blog Studio." },
+        { error: "Chưa có Qwen key. Hãy cấu hình QWEN_API_KEY/DASHSCOPE_API_KEY trên server hoặc nhập key tạm thời trong Blog Studio." },
         { status: 501 }
       );
     }
 
-    if (sessionApiKey && !sessionApiKey.startsWith("xai-")) {
-      return NextResponse.json({ error: "xAI key tạm thời không đúng định dạng." }, { status: 400 });
+    if (sessionApiKey && !sessionApiKey.startsWith("sk-")) {
+      return NextResponse.json({ error: "Qwen/DashScope key tạm thời thường bắt đầu bằng sk-." }, { status: 400 });
     }
 
     const body = (await request.json()) as BlogAiRequest;
@@ -367,8 +389,9 @@ export async function POST(request: Request) {
     const intentConfig = INTENT_PROMPTS[intent];
     const useResearch = body.researchEnabled !== false && (intent === "research_plan" || intent === "longform_from_plan");
 
-    const model = process.env.XAI_MODEL || "grok-4.20-reasoning";
-    const response = await fetch("https://api.x.ai/v1/responses", {
+    const model = process.env.QWEN_MODEL || "qwen3.5-plus";
+    const baseUrl = (process.env.QWEN_BASE_URL || DEFAULT_QWEN_BASE_URL).replace(/\/+$/, "");
+    const response = await fetch(`${baseUrl}/responses`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -377,16 +400,17 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model,
         input: buildInput(body, intent),
-        tools: useResearch ? [{ type: "web_search" }] : undefined,
-        parallel_tool_calls: useResearch ? true : undefined,
-        max_output_tokens: intent === "longform_from_plan" ? 9000 : intent === "draft_from_plan" || intent === "draft_from_brief" || intent === "improve_article" ? 5200 : 2600,
+        tools: useResearch ? [{ type: "web_search" }, { type: "web_extractor" }] : undefined,
+        tool_choice: useResearch ? "auto" : undefined,
+        enable_thinking: useResearch ? true : undefined,
+        temperature: intent === "seo_pack" ? 0.35 : 0.65,
       }),
     });
 
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       return NextResponse.json(
-        { error: "xAI trả về lỗi.", detail: payload },
+        { error: "Qwen trả về lỗi.", detail: payload },
         { status: response.status }
       );
     }
@@ -400,10 +424,11 @@ export async function POST(request: Request) {
       citations,
       intent,
       model,
-      keySource: process.env.XAI_API_KEY ? "env" : "session",
+      provider: "qwen",
+      keySource: process.env.QWEN_API_KEY || process.env.DASHSCOPE_API_KEY ? "env" : "session",
       usage: payload && typeof payload === "object" && "usage" in payload ? (payload as { usage: unknown }).usage : null,
     });
   } catch {
-    return NextResponse.json({ error: "Không thể gọi xAI lúc này." }, { status: 500 });
+    return NextResponse.json({ error: "Không thể gọi Qwen lúc này." }, { status: 500 });
   }
 }
