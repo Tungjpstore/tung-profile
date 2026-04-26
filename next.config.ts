@@ -13,6 +13,18 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
+        hostname: "*.r2.dev",
+      },
+      {
+        protocol: "https",
+        hostname: "media.tungjpstore.net",
+      },
+      {
+        protocol: "https",
+        hostname: "media.profile.tungjpstore.net",
+      },
+      {
+        protocol: "https",
         hostname: "i.pravatar.cc",
       },
     ],

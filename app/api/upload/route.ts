@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import fs from "fs";
 import path from "path";
 
@@ -11,6 +12,52 @@ function cloudinaryConfig() {
   const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET;
   if (!cloudName || !uploadPreset) return null;
   return { cloudName, uploadPreset, folder: process.env.CLOUDINARY_FOLDER || "tung-profile" };
+}
+
+function getR2Config() {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.R2_PUBLIC_URL;
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !publicUrl) return null;
+  return {
+    bucket,
+    publicUrl: publicUrl.replace(/\/$/, ""),
+    client: new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId, secretAccessKey },
+    }),
+  };
+}
+
+function safeImageName(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || "png";
+  const safeBase = name
+    .replace(/\.[^.]+$/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "image";
+  return { ext, safeBase };
+}
+
+async function uploadToR2(file: File) {
+  const r2 = getR2Config();
+  if (!r2) return null;
+  const { ext, safeBase } = safeImageName(file.name);
+  const key = `uploads/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeBase}.${ext}`;
+  await r2.client.send(new PutObjectCommand({
+    Bucket: r2.bucket,
+    Key: key,
+    Body: Buffer.from(await file.arrayBuffer()),
+    ContentType: file.type,
+    CacheControl: "public, max-age=31536000, immutable",
+  }));
+  return `${r2.publicUrl}/${key}`;
 }
 
 async function uploadToCloudinary(file: File) {
@@ -36,15 +83,7 @@ async function uploadToCloudinary(file: File) {
 
 async function uploadToVercelBlob(file: File) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
-  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-  const safeBase = file.name
-    .replace(/\.[^.]+$/, "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "image";
+  const { ext, safeBase } = safeImageName(file.name);
   const blob = await put(`uploads/${safeBase}.${ext}`, file, {
     access: "public",
     addRandomSuffix: true,
@@ -74,6 +113,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File quá lớn (tối đa 5MB)" }, { status: 400 });
     }
 
+    const r2Url = await uploadToR2(file);
+    if (r2Url) {
+      return NextResponse.json({ url: r2Url, storage: "cloudflare-r2" });
+    }
+
     const blobUrl = await uploadToVercelBlob(file);
     if (blobUrl) {
       return NextResponse.json({ url: blobUrl, storage: "vercel-blob" });
@@ -86,7 +130,7 @@ export async function POST(request: Request) {
 
     if (process.env.VERCEL === "1") {
       return NextResponse.json(
-        { error: "Production chưa cấu hình lưu ảnh. Hãy tạo Vercel Blob store để có BLOB_READ_WRITE_TOKEN, hoặc thêm CLOUDINARY_CLOUD_NAME và CLOUDINARY_UPLOAD_PRESET." },
+        { error: "Production chưa cấu hình lưu ảnh. Hãy thêm Cloudflare R2 env hoặc tạo Vercel Blob store để có BLOB_READ_WRITE_TOKEN." },
         { status: 501 }
       );
     }

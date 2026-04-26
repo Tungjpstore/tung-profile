@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { head, put } from "@vercel/blob";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -8,11 +9,12 @@ const DATA_PATH = path.join(process.cwd(), "data", "profile.json");
 const RUNTIME_DATA_PATH = path.join(os.tmpdir(), "tung-profile-data", "profile.json");
 const KV_KEY = process.env.PROFILE_STORE_KEY || "tung-profile:profile";
 const BLOB_PROFILE_PATH = process.env.PROFILE_BLOB_PATH || "data/profile.json";
+const R2_PROFILE_KEY = process.env.R2_PROFILE_KEY || "data/profile.json";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type StorageMode = "blob" | "kv" | "file" | "runtime";
+type StorageMode = "r2" | "blob" | "kv" | "file" | "runtime";
 
 interface StorageResult {
   mode: StorageMode;
@@ -25,6 +27,36 @@ function getKvConfig() {
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
   return { url: url.replace(/\/$/, ""), token };
+}
+
+function getR2Config() {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucket = process.env.R2_BUCKET_NAME;
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket) return null;
+  return { accountId, accessKeyId, secretAccessKey, bucket };
+}
+
+function getR2Client() {
+  const config = getR2Config();
+  if (!config) return null;
+  return {
+    bucket: config.bucket,
+    client: new S3Client({
+      region: "auto",
+      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+    }),
+  };
+}
+
+async function streamToString(stream: unknown) {
+  if (!stream || typeof (stream as { transformToString?: unknown }).transformToString !== "function") return "";
+  return (stream as { transformToString: () => Promise<string> }).transformToString();
 }
 
 async function kvCommand(command: unknown[]) {
@@ -48,6 +80,17 @@ async function kvCommand(command: unknown[]) {
 }
 
 async function readData() {
+  const r2 = getR2Client();
+  if (r2) {
+    try {
+      const object = await r2.client.send(new GetObjectCommand({ Bucket: r2.bucket, Key: R2_PROFILE_KEY }));
+      const raw = await streamToString(object.Body);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      // First Cloudflare setup may not have a profile object yet; fall back to seed data.
+    }
+  }
+
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     try {
       const blob = await head(BLOB_PROFILE_PATH);
@@ -69,6 +112,18 @@ async function readData() {
 async function writeData(data: unknown): Promise<StorageResult> {
   const payload = JSON.stringify(data, null, 2);
 
+  const r2 = getR2Client();
+  if (r2) {
+    await r2.client.send(new PutObjectCommand({
+      Bucket: r2.bucket,
+      Key: R2_PROFILE_KEY,
+      Body: payload,
+      ContentType: "application/json; charset=utf-8",
+      CacheControl: "no-cache",
+    }));
+    return { mode: "r2", persistent: true };
+  }
+
   if (process.env.BLOB_READ_WRITE_TOKEN) {
     await put(BLOB_PROFILE_PATH, payload, {
       access: "public",
@@ -85,7 +140,7 @@ async function writeData(data: unknown): Promise<StorageResult> {
   }
 
   if (process.env.VERCEL === "1") {
-    throw new Error("Production chưa có storage bền. Hãy tạo Vercel Blob store để có BLOB_READ_WRITE_TOKEN, hoặc thêm KV_REST_API_URL + KV_REST_API_TOKEN.");
+    throw new Error("Production chưa có storage bền. Hãy cấu hình Cloudflare R2 env hoặc tạo Vercel Blob store để có BLOB_READ_WRITE_TOKEN.");
   }
 
   try {
