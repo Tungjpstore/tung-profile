@@ -35,7 +35,7 @@ export interface PostProduct {
 }
 
 type EditorView = "write" | "preview" | "seo" | "history";
-type AiIntent = "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
+type AiIntent = "plan_article" | "draft_from_plan" | "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
 type PatchOperation = "replaceSelection" | "replaceContent" | "appendContent" | "updateFields" | "showOnly";
 
 interface AiSelection {
@@ -52,11 +52,23 @@ interface AiPatch {
   fields?: Partial<Pick<BlogPost, "title" | "slug" | "excerpt" | "metaTitle" | "metaDescription" | "category" | "tags">>;
 }
 
+interface AiScenario {
+  id: string;
+  title: string;
+  angle: string;
+  readerPromise: string;
+  outline: string[];
+  tone: string;
+  productFit: string;
+  suggestedTags: string[];
+}
+
 interface AiRouterResponse {
   result?: string;
   assistantNote?: string;
   patch?: AiPatch;
   warnings?: string[];
+  scenarios?: AiScenario[];
   intent?: AiIntent;
   error?: string;
 }
@@ -91,13 +103,14 @@ const panelCls = "rounded-2xl bg-white/[0.02] border border-white/[0.06] overflo
 const AI_KEY_STORAGE = "blog-studio:xai-key";
 const AI_MEMORY_STORAGE = "blog-studio:ai-memory";
 const AI_ACTIONS: Array<{ intent: AiIntent; label: string; hint: string; requiresSelection?: boolean; primary?: boolean }> = [
-  { intent: "continue", label: "Viết tiếp", hint: "Nối tiếp đúng mạch bài", primary: true },
+  { intent: "continue", label: "Viết tiếp", hint: "Nối tiếp đúng mạch bài" },
   { intent: "rewrite_selection", label: "Sửa đoạn chọn", hint: "Chỉ thay phần bôi đen", requiresSelection: true },
   { intent: "improve_article", label: "Làm gọn bài", hint: "Giữ ý, sửa cấu trúc" },
-  { intent: "draft_from_brief", label: "Viết nháp", hint: "Biến brief thành bài" },
   { intent: "seo_pack", label: "Tối ưu SEO", hint: "Tự điền title/meta/tag" },
   { intent: "product_pitch", label: "Gắn sản phẩm", hint: "Chèn CTA tự nhiên" },
 ];
+const AI_TONES = ["Thực chiến cá nhân", "Chuyên gia rõ ràng", "Thân mật gần gũi", "Review bán hàng mềm", "Kỹ thuật chi tiết"];
+const AI_DICTIONS = ["Đơn giản dễ hiểu", "Sắc gọn ít chữ", "Tự nhiên như chia sẻ", "Chuyên nghiệp cao cấp", "Giàu cảm xúc"];
 
 function slugify(input: string) {
   return input
@@ -184,6 +197,10 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
   const [aiPatch, setAiPatch] = useState<AiPatch | null>(null);
   const [lastSelection, setLastSelection] = useState<AiSelection | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiTone, setAiTone] = useState(AI_TONES[0]);
+  const [aiDiction, setAiDiction] = useState(AI_DICTIONS[0]);
+  const [aiScenarios, setAiScenarios] = useState<AiScenario[]>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [storedApiKey, setStoredApiKey] = useState(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem(AI_KEY_STORAGE) || "";
@@ -225,12 +242,19 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     };
   }, [editPost]);
 
+  const selectedScenario = useMemo(
+    () => aiScenarios.find((scenario) => scenario.id === selectedScenarioId) || aiScenarios[0] || null,
+    [aiScenarios, selectedScenarioId]
+  );
+
   const clearAiResponse = () => {
     setAiResult("");
     setAiAssistantNote("");
     setAiWarnings([]);
     setAiPatch(null);
     setLastSelection(null);
+    setAiScenarios([]);
+    setSelectedScenarioId("");
   };
 
   const openPost = (post: BlogPost) => {
@@ -426,6 +450,14 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     if (!editPost) return;
     const selection = getEditorSelection();
     const action = AI_ACTIONS.find((item) => item.intent === intent);
+    if (intent === "plan_article" && !editPost.title.trim() && !aiInstruction.trim()) {
+      showToast("Nhập tiêu đề hoặc brief trước để AI lên 3 hướng bài.", "error");
+      return;
+    }
+    if (intent === "draft_from_plan" && !selectedScenario) {
+      showToast("Hãy tạo và chọn một hướng bài trước khi viết nháp.", "error");
+      return;
+    }
     if (action?.requiresSelection && !selection.text.trim()) {
       showToast("Hãy bôi đen đoạn cần AI xử lý trong ô Markdown trước đã.", "error");
       return;
@@ -442,6 +474,10 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setAiWarnings([]);
     setAiPatch(null);
     setLastSelection(selection);
+    if (intent === "plan_article") {
+      setAiScenarios([]);
+      setSelectedScenarioId("");
+    }
 
     try {
       const res = await fetch("/api/ai/blog", {
@@ -454,6 +490,9 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
           intent,
           instruction: aiInstruction,
           memory: aiMemory,
+          tone: aiTone,
+          diction: aiDiction,
+          scenario: intent === "draft_from_plan" ? selectedScenario : undefined,
           selection,
           post: editPost,
         }),
@@ -470,6 +509,11 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
       setAiAssistantNote(json.assistantNote || "");
       setAiWarnings(Array.isArray(json.warnings) ? json.warnings.filter((warning) => typeof warning === "string") : []);
       setAiResult(fieldsText || patch?.content || json.result || json.assistantNote || "");
+      if (Array.isArray(json.scenarios) && json.scenarios.length > 0) {
+        setAiScenarios(json.scenarios);
+        setSelectedScenarioId(json.scenarios[0].id);
+        setAiResult("Đã tạo 3 hướng bài. Chọn một hướng bên trên rồi bấm Viết bản nháp.");
+      }
       if (json.intent) setAiIntent(json.intent);
     } catch {
       showToast("Không gọi được AI lúc này", "error");
@@ -871,7 +915,61 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
               <div className="p-5 space-y-4">
                 <div>
                   <label className={labelCls}>Brief / yêu cầu cho AI</label>
-                  <textarea className={textareaCls} rows={3} value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} placeholder="VD: giữ giọng cá nhân, thêm ví dụ thực tế, không đổi chủ đề..." />
+                  <textarea className={textareaCls} rows={3} value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} placeholder="VD: bài cho người mới bắt đầu, cần có ví dụ thực tế, cuối bài gợi ý sản phẩm thật mềm..." />
+                </div>
+
+                <div className="grid gap-3">
+                  <div>
+                    <label className={labelCls}>Giọng văn</label>
+                    <select className={inputCls} value={aiTone} onChange={(event) => setAiTone(event.target.value)}>
+                      {AI_TONES.map((tone) => <option key={tone} value={tone}>{tone}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Ngôn từ</label>
+                    <select className={inputCls} value={aiDiction} onChange={(event) => setAiDiction(event.target.value)}>
+                      {AI_DICTIONS.map((diction) => <option key={diction} value={diction}>{diction}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/10 p-3">
+                  <p className="text-xs font-bold text-indigo-100">Quy trình viết bài</p>
+                  <div className="mt-3 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => runAi("plan_article")}
+                      disabled={aiLoading}
+                      className="rounded-xl bg-indigo-500 px-3 py-2 text-left text-xs font-bold text-white transition-all hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {aiLoading && aiIntent === "plan_article" ? "Đang tạo 3 hướng..." : "1. Tạo 3 hướng bài từ tiêu đề"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runAi("draft_from_plan")}
+                      disabled={aiLoading || !selectedScenario}
+                      className="rounded-xl border border-white/[0.08] bg-white/[0.06] px-3 py-2 text-left text-xs font-bold text-zinc-100 transition-all hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {aiLoading && aiIntent === "draft_from_plan" ? "Đang viết bản nháp..." : "2. Viết bản nháp theo hướng đã chọn"}
+                    </button>
+                  </div>
+                  {aiScenarios.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {aiScenarios.map((scenario, index) => (
+                        <button
+                          key={scenario.id}
+                          type="button"
+                          onClick={() => setSelectedScenarioId(scenario.id)}
+                          className={`w-full rounded-xl border p-3 text-left transition-all ${selectedScenario?.id === scenario.id ? "border-indigo-300/60 bg-indigo-400/15" : "border-white/[0.06] bg-black/20 hover:bg-white/[0.05]"}`}
+                        >
+                          <span className="text-[10px] font-black uppercase text-indigo-200">Hướng {index + 1}</span>
+                          <strong className="mt-1 block text-xs text-white">{scenario.title}</strong>
+                          {scenario.angle ? <span className="mt-1 block text-[11px] leading-4 text-zinc-400">{scenario.angle}</span> : null}
+                          {scenario.readerPromise ? <span className="mt-2 block text-[11px] leading-4 text-emerald-200">{scenario.readerPromise}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
 
                 <details className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">

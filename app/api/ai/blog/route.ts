@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 type BlogAiMode = "outline" | "draft" | "rewrite" | "seo" | "social" | "translate" | "score";
-type BlogAiIntent = "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
+type BlogAiIntent = "plan_article" | "draft_from_plan" | "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
 type PatchOperation = "replaceSelection" | "replaceContent" | "appendContent" | "updateFields" | "showOnly";
 
 interface BlogAiRequest {
@@ -9,6 +9,9 @@ interface BlogAiRequest {
   intent?: BlogAiIntent;
   instruction?: string;
   memory?: string;
+  tone?: string;
+  diction?: string;
+  scenario?: BlogAiScenario;
   selection?: {
     text?: string;
     start?: number;
@@ -38,6 +41,17 @@ interface BlogAiRequest {
   };
 }
 
+interface BlogAiScenario {
+  id?: string;
+  title?: string;
+  angle?: string;
+  readerPromise?: string;
+  outline?: string[];
+  tone?: string;
+  productFit?: string;
+  suggestedTags?: string[];
+}
+
 interface BlogAiPatch {
   operation: PatchOperation;
   content?: string;
@@ -48,11 +62,20 @@ interface BlogAiRouterResult {
   assistantNote: string;
   patch: BlogAiPatch;
   warnings?: string[];
+  scenarios?: BlogAiScenario[];
 }
 
 const PATCH_OPERATIONS: PatchOperation[] = ["replaceSelection", "replaceContent", "appendContent", "updateFields", "showOnly"];
 
 const INTENT_PROMPTS: Record<BlogAiIntent, { operation: PatchOperation; prompt: string }> = {
+  plan_article: {
+    operation: "showOnly",
+    prompt: "Đề xuất đúng 3 kịch bản/hướng triển khai bài viết dựa trên title, brief, category, tags, sản phẩm đính kèm và phong cách đã chọn. Không viết bài hoàn chỉnh. Mỗi kịch bản phải khác nhau thật sự về góc nhìn, lời hứa với người đọc và outline.",
+  },
+  draft_from_plan: {
+    operation: "replaceContent",
+    prompt: "Viết bản nháp hoàn chỉnh bằng Markdown dựa trên selectedScenario, title, brief, tone, diction và currentPost. Phải đi theo outline đã chọn, không tự đổi hướng. Nếu có attachedProducts thì chỉ lồng ghép mềm khi phù hợp.",
+  },
   make_outline: {
     operation: "appendContent",
     prompt: "Tạo dàn ý Markdown bám sát title, category, tags, excerpt và brief. Nếu bài đã có nội dung, chỉ append outline như phần bổ sung, không thay toàn bài.",
@@ -88,6 +111,8 @@ const INTENT_PROMPTS: Record<BlogAiIntent, { operation: PatchOperation; prompt: 
 };
 
 const ALLOWED_OPERATIONS: Record<BlogAiIntent, PatchOperation[]> = {
+  plan_article: ["showOnly"],
+  draft_from_plan: ["replaceContent", "showOnly"],
   make_outline: ["appendContent", "showOnly"],
   draft_from_brief: ["replaceContent", "showOnly"],
   continue: ["appendContent", "showOnly"],
@@ -114,6 +139,23 @@ function cleanFields(fields: unknown): BlogAiPatch["fields"] | undefined {
   if (typeof raw.category === "string") cleaned.category = raw.category;
   if (Array.isArray(raw.tags)) cleaned.tags = raw.tags.filter((tag): tag is string => typeof tag === "string");
   return Object.keys(cleaned).length ? cleaned : undefined;
+}
+
+function cleanScenarios(value: unknown): BlogAiScenario[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .slice(0, 3)
+    .map((item, index) => ({
+      id: typeof item.id === "string" && item.id.trim() ? item.id : `scenario-${index + 1}`,
+      title: typeof item.title === "string" ? item.title.trim() : `Hướng ${index + 1}`,
+      angle: typeof item.angle === "string" ? item.angle.trim() : "",
+      readerPromise: typeof item.readerPromise === "string" ? item.readerPromise.trim() : "",
+      outline: Array.isArray(item.outline) ? item.outline.filter((line): line is string => typeof line === "string").slice(0, 8) : [],
+      tone: typeof item.tone === "string" ? item.tone.trim() : "",
+      productFit: typeof item.productFit === "string" ? item.productFit.trim() : "",
+      suggestedTags: Array.isArray(item.suggestedTags) ? item.suggestedTags.filter((tag): tag is string => typeof tag === "string").slice(0, 6) : [],
+    }));
 }
 
 function extractText(payload: unknown): string {
@@ -162,6 +204,7 @@ function parseRouterResult(text: string, fallbackOperation: PatchOperation, allo
           assistantNote: typeof parsed.assistantNote === "string" ? parsed.assistantNote : "AI đã tạo patch cho bài viết.",
           patch: { operation, content, fields },
           warnings: Array.isArray(parsed.warnings) ? parsed.warnings.filter((warning): warning is string => typeof warning === "string") : [],
+          scenarios: cleanScenarios((parsed as { scenarios?: unknown }).scenarios),
         };
       }
     } catch {
@@ -188,6 +231,8 @@ function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
         "Rewrite rule: khi intent là rewrite_selection, chỉ sửa selectedText; giữ cùng ý, cùng thông tin, cùng phạm vi, chỉ làm câu chữ rõ/sắc/mạch lạc hơn.",
         "Whole-article rule: khi intent là improve_article, được chỉnh toàn bài nhưng phải giữ luận điểm, bố cục chính và dữ kiện; không biến bài thành một bài khác.",
         "Draft rule: bản nháp phải đi từ title/excerpt/tags/content hiện có; nếu brief mơ hồ, hỏi lại bằng showOnly thay vì bịa.",
+        "Planning rule: khi intent là plan_article, trả đúng 3 scenarios khác nhau và patch.operation='showOnly'. Mỗi scenario cần title, angle, readerPromise, outline, tone, productFit, suggestedTags.",
+        "Scenario draft rule: khi intent là draft_from_plan, selectedScenario là bản thiết kế bắt buộc; không đổi sang hướng khác, không bỏ outline chính.",
         "SEO rule: chỉ trả fields khi operation là updateFields; không trộn nội dung bài vào SEO fields.",
         "Commerce rule: attachedProducts là nguồn sự thật duy nhất cho sản phẩm. Không tự thêm giá, ưu đãi, link, cam kết hoặc thông số không có trong dữ liệu. CTA phải giống bài tư vấn/review, không rẻ tiền.",
         "Safety rule: nếu thiếu thông tin quan trọng hoặc yêu cầu mâu thuẫn với bài hiện tại, trả patch.operation='showOnly' với câu hỏi/nguyên nhân ngắn.",
@@ -203,7 +248,10 @@ function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
         `allowedOperations: ${ALLOWED_OPERATIONS[intent].join(", ")}`,
         `task: ${intentConfig.prompt}`,
         body.instruction ? `userInstruction: ${body.instruction}` : "userInstruction: ",
+        body.tone ? `selectedTone: ${body.tone}` : "selectedTone: ",
+        body.diction ? `selectedDiction: ${body.diction}` : "selectedDiction: ",
         body.memory ? `editorMemory/styleGuide: ${body.memory}` : "editorMemory/styleGuide: ",
+        body.scenario ? `selectedScenario: ${JSON.stringify(body.scenario)}` : "selectedScenario: ",
         "currentPost:",
         JSON.stringify({
           title: body.post?.title || "",
@@ -235,6 +283,18 @@ function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
         "Return exactly this JSON shape:",
         JSON.stringify({
           assistantNote: "Một câu ngắn nói AI đã làm gì.",
+          scenarios: [
+            {
+              id: "scenario-1",
+              title: "optional for plan_article",
+              angle: "optional for plan_article",
+              readerPromise: "optional for plan_article",
+              outline: ["optional"],
+              tone: "optional",
+              productFit: "optional",
+              suggestedTags: ["optional"],
+            },
+          ],
           patch: {
             operation: intentConfig.operation,
             content: "Markdown text nếu operation cần content.",
@@ -284,7 +344,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model,
         input: buildInput(body, intent),
-        max_output_tokens: intent === "draft_from_brief" || intent === "improve_article" ? 3200 : 1600,
+        max_output_tokens: intent === "draft_from_plan" || intent === "draft_from_brief" || intent === "improve_article" ? 4200 : 2200,
       }),
     });
 
