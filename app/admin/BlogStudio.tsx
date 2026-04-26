@@ -254,6 +254,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     () => aiScenarios.find((scenario) => scenario.id === selectedScenarioId) || aiScenarios[0] || null,
     [aiScenarios, selectedScenarioId]
   );
+  const aiFlowStep = aiScenarios.length > 0 ? (analysis.wordCount >= 700 ? 3 : 2) : 1;
 
   const clearAiResponse = () => {
     setAiResult("");
@@ -795,11 +796,9 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2 border-t border-white/[0.06] pt-3">
-                    <button type="button" onClick={() => runAi("research_plan")} disabled={aiLoading} className="rounded-full bg-indigo-500/15 px-3 py-1.5 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500/25 disabled:opacity-50">Research + 3 hướng</button>
-                    <button type="button" onClick={() => runAi("longform_from_plan")} disabled={aiLoading} className="rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50">Viết bài dài</button>
-                    <button type="button" onClick={() => runAi("continue")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">Viết tiếp</button>
-                    <button type="button" onClick={() => runAi("improve_article")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">Tối ưu bài</button>
-                    <button type="button" onClick={() => runAi("seo_pack")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">SEO</button>
+                    <button type="button" onClick={() => runAi("research_plan")} disabled={aiLoading} className="rounded-full bg-indigo-500/15 px-3 py-1.5 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500/25 disabled:opacity-50">AI lên hướng</button>
+                    <button type="button" onClick={() => runAi("longform_from_plan")} disabled={aiLoading} className="rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50">AI viết bài</button>
+                    <button type="button" onClick={() => runAi("seo_pack")} disabled={aiLoading} className="rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-bold text-zinc-300 transition-all hover:bg-white/[0.1] disabled:opacity-50">Tối ưu SEO</button>
                   </div>
                 </div>
               </section>
@@ -993,72 +992,60 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                 </div>
               </div>
               <div className="p-5 space-y-4">
-                <div>
-                  <label className={labelCls}>Brief / yêu cầu cho AI</label>
-                  <textarea className={textareaCls} rows={3} value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} placeholder="VD: bài cho người mới bắt đầu, cần có ví dụ thực tế, cuối bài gợi ý sản phẩm thật mềm..." />
-                </div>
+                <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/10 p-3">
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    {[
+                      ["1", "Ý tưởng"],
+                      ["2", "Chọn hướng"],
+                      ["3", "Viết bài"],
+                    ].map(([step, label]) => {
+                      const active = aiFlowStep >= Number(step);
+                      return (
+                        <div key={step} className={`rounded-lg border px-2 py-2 text-center ${active ? "border-indigo-300/40 bg-indigo-400/15 text-white" : "border-white/[0.06] bg-black/20 text-zinc-500"}`}>
+                          <span className="block text-[10px] font-black">{step}</span>
+                          <span className="block truncate text-[10px] font-bold">{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                <div className="grid gap-3">
-                  <div>
-                    <label className={labelCls}>Giọng văn</label>
-                    <select className={inputCls} value={aiTone} onChange={(event) => setAiTone(event.target.value)}>
+                  <label className={labelCls}>Ý tưởng bài viết</label>
+                  <textarea className={textareaCls} rows={4} value={aiInstruction} onChange={(event) => setAiInstruction(event.target.value)} placeholder="Nhập tiêu đề, chủ đề, mục tiêu bài viết, sản phẩm muốn nhắc tới..." />
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <select className={inputCls} value={aiTone} onChange={(event) => setAiTone(event.target.value)} aria-label="Giọng văn">
                       {AI_TONES.map((tone) => <option key={tone} value={tone}>{tone}</option>)}
                     </select>
-                  </div>
-                  <div>
-                    <label className={labelCls}>Ngôn từ</label>
-                    <select className={inputCls} value={aiDiction} onChange={(event) => setAiDiction(event.target.value)}>
+                    <select className={inputCls} value={aiDiction} onChange={(event) => setAiDiction(event.target.value)} aria-label="Ngôn từ">
                       {AI_DICTIONS.map((diction) => <option key={diction} value={diction}>{diction}</option>)}
                     </select>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className={labelCls}>Độ dài</label>
-                      <select className={inputCls} value={aiTargetWords} onChange={(event) => setAiTargetWords(Number(event.target.value))}>
-                        {AI_TARGET_WORDS.map((count) => <option key={count} value={count}>{count.toLocaleString("vi-VN")} từ</option>)}
-                      </select>
-                    </div>
+                    <select className={inputCls} value={aiTargetWords} onChange={(event) => setAiTargetWords(Number(event.target.value))} aria-label="Độ dài">
+                      {AI_TARGET_WORDS.map((count) => <option key={count} value={count}>{count.toLocaleString("vi-VN")} từ</option>)}
+                    </select>
                     <label className="flex min-h-12 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-xs font-bold text-zinc-300">
                       <input type="checkbox" checked={aiResearchEnabled} onChange={(event) => setAiResearchEnabled(event.target.checked)} />
-                      Web research
+                      Tra nguồn web
                     </label>
                   </div>
-                  <div>
-                    <label className={labelCls}>Độc giả mục tiêu</label>
-                    <input className={inputCls} value={aiAudience} onChange={(event) => setAiAudience(event.target.value)} placeholder="VD: người mới làm affiliate, chủ shop nhỏ, developer freelance..." />
-                  </div>
+                  <input className={inputCls + " mt-3"} value={aiAudience} onChange={(event) => setAiAudience(event.target.value)} placeholder="Độc giả mục tiêu" />
+
+                  <button
+                    type="button"
+                    onClick={() => runAi("research_plan")}
+                    disabled={aiLoading}
+                    className="mt-3 w-full rounded-xl bg-indigo-500 px-3 py-3 text-left text-sm font-bold text-white transition-all hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {aiLoading && aiIntent === "research_plan" ? "Đang nghiên cứu và dựng hướng..." : "Tạo 3 hướng bài để duyệt"}
+                  </button>
                 </div>
 
-                <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/10 p-3">
-                  <p className="text-xs font-bold text-indigo-100">Quy trình viết bài</p>
-                  <div className="mt-3 grid gap-2">
-                    <button
-                      type="button"
-                      onClick={() => runAi("research_plan")}
-                      disabled={aiLoading}
-                      className="rounded-xl bg-indigo-500 px-3 py-2 text-left text-xs font-bold text-white transition-all hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {aiLoading && aiIntent === "research_plan" ? "Đang nghiên cứu nguồn..." : "1. Research + tạo 3 kịch bản"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => runAi("longform_from_plan")}
-                      disabled={aiLoading}
-                      className="rounded-xl border border-emerald-300/20 bg-emerald-500/10 px-3 py-2 text-left text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {aiLoading && aiIntent === "longform_from_plan" ? `Đang viết bài ${aiTargetWords.toLocaleString("vi-VN")} từ...` : `2. Viết bài dài có nguồn (${aiTargetWords.toLocaleString("vi-VN")} từ)`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => runAi("draft_from_plan")}
-                      disabled={aiLoading || !selectedScenario}
-                      className="rounded-xl border border-white/[0.08] bg-white/[0.06] px-3 py-2 text-left text-xs font-bold text-zinc-100 transition-all hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {aiLoading && aiIntent === "draft_from_plan" ? "Đang viết bản nháp ngắn..." : "Viết bản nháp ngắn theo hướng đã chọn"}
-                    </button>
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold text-white">Hướng bài</p>
+                    {selectedScenario ? <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-200">Đã chọn</span> : null}
                   </div>
                   {aiScenarios.length > 0 ? (
-                    <div className="mt-3 space-y-2">
+                    <div className="space-y-2">
                       {aiScenarios.map((scenario, index) => (
                         <button
                           key={scenario.id}
@@ -1073,11 +1060,35 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                         </button>
                       ))}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-white/[0.08] p-4 text-center text-xs text-zinc-500">Chưa có hướng bài.</div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-emerald-300/20 bg-emerald-500/10 p-3">
+                  <p className="text-xs font-bold text-emerald-100">Bản nháp</p>
+                  <div className="mt-3 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => runAi("longform_from_plan")}
+                      disabled={aiLoading}
+                      className="rounded-xl bg-emerald-500 px-3 py-3 text-left text-sm font-bold text-white transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {aiLoading && aiIntent === "longform_from_plan" ? `Đang viết ${aiTargetWords.toLocaleString("vi-VN")} từ...` : `Viết bài hoàn chỉnh ${aiTargetWords.toLocaleString("vi-VN")} từ`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runAi("draft_from_plan")}
+                      disabled={aiLoading || !selectedScenario}
+                      className="rounded-xl border border-white/[0.08] bg-white/[0.06] px-3 py-2 text-left text-xs font-bold text-zinc-100 transition-all hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {aiLoading && aiIntent === "draft_from_plan" ? "Đang viết nháp ngắn..." : "Viết nháp ngắn"}
+                    </button>
+                  </div>
                 </div>
 
                 <details className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
-                  <summary className="cursor-pointer text-xs font-bold text-zinc-300">Key xAI và phong cách</summary>
+                  <summary className="cursor-pointer text-xs font-bold text-zinc-300">Cài đặt AI</summary>
                   <div className="mt-3 space-y-3">
                     <input className={inputCls} type={showApiKey ? "text" : "password"} value={apiKeyDraft} onChange={(event) => setApiKeyDraft(event.target.value.trim())} placeholder="xai-..." autoComplete="off" />
                     <div className="flex flex-wrap gap-2">
@@ -1085,24 +1096,27 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                       <button type="button" onClick={() => setShowApiKey((value) => !value)} className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-[11px] font-bold text-zinc-300">{showApiKey ? "Ẩn" : "Hiện"}</button>
                       {storedApiKey ? <button type="button" onClick={deleteStoredApiKey} className="rounded-lg bg-red-500/10 px-3 py-1.5 text-[11px] font-bold text-red-300">Xoá</button> : null}
                     </div>
-                    <textarea className={textareaCls} rows={4} value={aiMemory} onChange={(event) => updateAiMemory(event.target.value)} placeholder="VD: tiếng Việt tự nhiên, câu ngắn, ít sáo rỗng, giữ giọng cá nhân..." />
+                    <textarea className={textareaCls} rows={4} value={aiMemory} onChange={(event) => updateAiMemory(event.target.value)} placeholder="Phong cách mặc định của bạn..." />
                   </div>
                 </details>
 
-                <div className="grid gap-2">
-                  {AI_ACTIONS.map((action) => (
-                    <button
-                      key={action.intent}
-                      type="button"
-                      onClick={() => runAi(action.intent)}
-                      disabled={aiLoading}
-                      className={`rounded-xl border px-3 py-2 text-left transition-all ${action.primary ? "border-indigo-300/30 bg-indigo-500/15" : aiIntent === action.intent ? "border-indigo-300/50 bg-indigo-500/20" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.07]"} ${aiLoading ? "opacity-60" : ""}`}
-                    >
-                      <span className="block text-[11px] font-bold text-white">{aiLoading && aiIntent === action.intent ? "Đang chạy..." : action.label}</span>
-                      <span className="mt-0.5 block text-[10px] leading-4 text-zinc-500">{action.hint}</span>
-                    </button>
-                  ))}
-                </div>
+                <details className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-zinc-300">Công cụ sửa nhanh</summary>
+                  <div className="mt-3 grid gap-2">
+                    {AI_ACTIONS.map((action) => (
+                      <button
+                        key={action.intent}
+                        type="button"
+                        onClick={() => runAi(action.intent)}
+                        disabled={aiLoading}
+                        className={`rounded-xl border px-3 py-2 text-left transition-all ${aiIntent === action.intent ? "border-indigo-300/50 bg-indigo-500/20" : "border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.07]"} ${aiLoading ? "opacity-60" : ""}`}
+                      >
+                        <span className="block text-[11px] font-bold text-white">{aiLoading && aiIntent === action.intent ? "Đang chạy..." : action.label}</span>
+                        <span className="mt-0.5 block text-[10px] leading-4 text-zinc-500">{action.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </details>
 
                 {aiAssistantNote || aiWarnings.length > 0 || aiResearchBrief || aiCitations.length > 0 || aiResult ? (
                   <div className="rounded-xl border border-white/[0.06] bg-black/20 p-3">
