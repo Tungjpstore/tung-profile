@@ -1,0 +1,175 @@
+{
+  "name": "Tùng Nguyễn",
+  "tagline": "Developer • Freelancer • Digital Services",
+  "avatar": "/uploads/1777186413793-ol1rvo.png",
+  "bio": [
+    "Xin chào! Mình là Tùng mình sinh năm 1999 — một lập trình viên full-stack đến từ Việt Nam.",
+    "Mình chuyên xây dựng website hiện đại, ứng dụng mobile và giải pháp AI. Với hơn 3 năm kinh nghiệm, mình luôn đặt chất lượng lên hàng đầu.",
+    "Mình tin rằng công nghệ tốt có thể giúp mọi doanh nghiệp phát triển mạnh mẽ hơn. Hãy liên hệ nếu bạn cần một đối tác công nghệ đáng tin cậy!"
+  ],
+  "skills": [
+    "React",
+    "Next.js",
+    "TypeScript",
+    "Node.js",
+    "Python",
+    "AI/ML",
+    "Tailwind CSS",
+    "PostgreSQL"
+  ],
+  "info": [
+    {
+      "icon": "👤",
+      "label": "Họ tên",
+      "value": "Nguyễn Công Tùng",
+      "green": false
+    },
+    {
+      "icon": "💻",
+      "label": "Vị trí",
+      "value": "Full-Stack Developer",
+      "green": false
+    },
+    {
+      "icon": "📍",
+      "label": "Địa điểm",
+      "value": "Việt Nam 🇻🇳",
+      "green": false
+    },
+    {
+      "icon": "⏳",
+      "label": "Kinh nghiệm",
+      "value": "3+ năm",
+      "green": false
+    },
+    {
+      "icon": "🎯",
+      "label": "Chuyên môn",
+      "value": "Web, Mobile, AI",
+      "green": false
+    },
+    {
+      "icon": "✅",
+      "label": "Trạng thái",
+      "value": "Sẵn sàng nhận việc",
+      "green": true
+    }
+  ],
+  "projects": [
+    {
+      "name": "Nền tảng E-Commerce",
+      "desc": "Website bán hàng trực tuyến với giỏ hàng, thanh toán Stripe và quản trị kho hàng.",
+      "tech": [
+        "Next.js",
+        "Stripe",
+        "PostgreSQL"
+      ],
+      "status": "Hoàn thành"
+    },
+    {
+      "name": "AI Chatbot Platform",
+      "desc": "Chatbot thông minh tích hợp GPT, hỗ trợ đa ngôn ngữ và phân tích cảm xúc.",
+      "tech": [
+        "Python",
+        "OpenAI",
+        "React"
+      ],
+      "status": "Hoàn thành"
+    },
+    {
+      "name": "SaaS Dashboard",
+      "desc": "Bảng điều khiển phân tích dữ liệu real-time với biểu đồ tương tác.",
+      "tech": [
+        "React",
+        "D3.js",
+        "Node.js"
+      ],
+      "status": "Hoàn thành"
+    },
+    {
+      "name": "Fitness Tracker App",
+      "desc": "Ứng dụng mobile theo dõi tập luyện, dinh dưỡng và tiến trình.",
+      "tech": [
+        "React Native",
+        "Firebase"
+      ],
+      "status": "Đang phát triển"
+    },
+    {
+      "name": "Agency Portfolio",
+      "desc": "Website giới thiệu cho digital agency với animation cao cấp.",
+      "tech": [
+        "Next.js",
+        "Tailwind",
+        "Framer Motion"
+      ],
+      "status": "Hoàn thành"
+    }
+  ],
+  "services": [
+    {
+      "icon": "🌐",
+      "name": "Thiết kế Website",
+      "desc": "Website đẹp, chuẩn SEO, tốc độ cao — từ landing page đến web app.",
+      "price": "Từ 3.000.000đ"
+    },
+    {
+      "icon": "📱",
+      "name": "Ứng dụng Mobile",
+      "desc": "App đa nền tảng iOS & Android với trải nghiệm mượt mà.",
+      "price": "Từ 8.000.000đ"
+    },
+    {
+      "icon": "🤖",
+      "name": "Giải pháp AI",
+      "desc": "Chatbot, phân tích dữ liệu và tự động hóa quy trình.",
+      "price": "Liên hệ"
+    },
+    {
+      "icon": "💼",
+      "name": "Dịch vụ Số",
+      "desc": "Hosting, domain, email doanh nghiệp, bảo trì và tư vấn.",
+      "price": "Liên hệ"
+    }
+  ],
+  "socials": [
+    {
+      "name": "Facebook",
+      "href": "https://facebook.com"
+    },
+    {
+      "name": "Zalo",
+      "href": "https://zalo.me"
+    },
+    {
+      "name": "GitHub",
+      "href": "https://github.com"
+    },
+    {
+      "name": "Email",
+      "href": "mailto:your@email.com"
+    }
+  ],
+  "payment": {
+    "bankName": "PVCombank",
+    "accountNumber": "101003645860",
+    "accountHolder": "NGUYEN CONG TUNG",
+    "qrImage": "/uploads/1777174467964-2ew9dp.png"
+  },
+  "theme": {
+    "accent": "cyan",
+    "mode": "dark"
+  },
+  "template": "card",
+  "translations": {
+    "en": {
+      "tagline": "Developer • Freelancer • Digital Services",
+      "bio": [
+        "Hi! I'm Tung — a full-stack developer from Vietnam.",
+        "I specialize in building modern websites, mobile apps, and AI solutions. With 3+ years of experience, I always prioritize quality.",
+        "I believe great technology can help businesses grow stronger. Contact me if you need a reliable tech partner!"
+      ]
+    }
+  },
+  "cover": "/uploads/1777186410578-rn7t34.png"
+}

@@ -1,0 +1,10 @@
+{
+  "slug": "xin-chao",
+  "title": "Xin chào thế giới!",
+  "cover": "",
+  "content": "# Xin chào!\n\nĐây là bài viết đầu tiên trên blog của mình.\n\n## Về blog này\n\nMình sẽ chia sẻ kiến thức về **lập trình**, **thiết kế** và **công nghệ** tại đây.\n\n### Các chủ đề sắp tới\n\n- React & Next.js tips\n- Thiết kế UI/UX\n- AI và Machine Learning\n- Kinh nghiệm freelancing\n\nHãy theo dõi để cập nhật nhé! 🚀",
+  "tags": ["Giới thiệu"],
+  "status": "published",
+  "createdAt": "2026-04-26T00:00:00.000Z",
+  "updatedAt": "2026-04-26T00:00:00.000Z"
+}
