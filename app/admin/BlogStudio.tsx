@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MarkdownRenderer from "../components/MarkdownRenderer";
 import { SITE_URL } from "../lib/site";
 
@@ -22,8 +22,20 @@ export interface BlogPost {
   readingMinutes?: number;
 }
 
-type EditorView = "write" | "preview" | "seo" | "ai";
+type EditorView = "write" | "preview" | "seo" | "ai" | "history";
 type AiMode = "outline" | "draft" | "rewrite" | "seo" | "social" | "translate" | "score";
+
+interface PostVersion {
+  id: string;
+  savedAt: string;
+  post: BlogPost;
+}
+
+interface DraftSnapshot {
+  key: string;
+  savedAt: string;
+  post: BlogPost;
+}
 
 interface BlogStudioProps {
   posts: BlogPost[];
@@ -90,6 +102,23 @@ function parseJsonBlock(text: string) {
   }
 }
 
+function draftKey(slug: string) {
+  return `blog-studio-draft:${slug || "new"}`;
+}
+
+function readDraft(slug: string): DraftSnapshot | null {
+  if (typeof window === "undefined") return null;
+  const key = draftKey(slug);
+  const raw = window.localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Omit<DraftSnapshot, "key">;
+    return parsed?.post ? { ...parsed, key } : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function BlogStudio({ posts, setPosts, editPost, setEditPost, showToast }: BlogStudioProps) {
   const [originalSlug, setOriginalSlug] = useState("");
   const [view, setView] = useState<EditorView>("write");
@@ -98,6 +127,10 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
   const [aiInstruction, setAiInstruction] = useState("");
   const [aiResult, setAiResult] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [versions, setVersions] = useState<PostVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState("");
+  const [draftCandidate, setDraftCandidate] = useState<DraftSnapshot | null>(null);
 
   const analysis = useMemo(() => {
     const post = editPost || emptyPost();
@@ -131,6 +164,8 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setEditPost(post);
     setView("write");
     setAiResult("");
+    setDraftCandidate(readDraft(post.slug));
+    loadVersions(post.slug);
   };
 
   const newPost = () => {
@@ -138,11 +173,43 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     setEditPost(emptyPost());
     setView("write");
     setAiResult("");
+    setDraftCandidate(readDraft(""));
+    setVersions([]);
   };
 
   const updatePost = (patch: Partial<BlogPost>) => {
     if (!editPost) return;
     setEditPost({ ...editPost, ...patch });
+  };
+
+  useEffect(() => {
+    if (!editPost) return;
+    const key = draftKey(originalSlug || editPost.slug);
+    const timer = window.setTimeout(() => {
+      const savedAt = new Date().toISOString();
+      window.localStorage.setItem(key, JSON.stringify({ savedAt, post: editPost }));
+      setDraftSavedAt(savedAt);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [editPost, originalSlug]);
+
+  const loadVersions = async (slug: string) => {
+    if (!slug) {
+      setVersions([]);
+      return;
+    }
+    setVersionsLoading(true);
+    const res = await fetch(`/api/posts/versions?slug=${encodeURIComponent(slug)}`);
+    const json = await res.json().catch(() => []);
+    setVersions(Array.isArray(json) ? json : []);
+    setVersionsLoading(false);
+  };
+
+  const clearDraft = (slug: string) => {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(draftKey(slug));
+    setDraftCandidate(null);
+    setDraftSavedAt("");
   };
 
   const insertMarkdown = (before: string, after = "", fallback = "") => {
@@ -201,6 +268,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
 
     const updated = await fetch("/api/posts?all=true").then((r) => r.json());
     setPosts(updated);
+    clearDraft(originalSlug || slug);
     setEditPost(null);
     setSaving(false);
     showToast("Đã lưu bài viết");
@@ -327,12 +395,13 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
           </div>
         </div>
 
-        <div className="grid grid-cols-2 border-b border-white/[0.06] md:grid-cols-4">
+        <div className="grid grid-cols-2 border-b border-white/[0.06] md:grid-cols-5">
           {[
             ["write", "Soạn thảo"],
             ["preview", "Preview"],
             ["seo", "SEO"],
             ["ai", "xAI"],
+            ["history", "Lịch sử"],
           ].map(([id, label]) => (
             <button key={id} onClick={() => setView(id as EditorView)} className={`min-h-12 border-r border-white/[0.06] text-xs font-bold transition-colors last:border-r-0 ${view === id ? "bg-white/[0.06] text-white" : "text-zinc-500 hover:text-zinc-300"}`}>
               {label}
@@ -506,9 +575,67 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
               ) : null}
             </div>
           )}
+
+          {view === "history" && (
+            <div className="p-6 space-y-4">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+                <p className="text-sm font-bold text-white">Lịch sử phiên bản</p>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">Mỗi lần lưu một bài đã tồn tại, hệ thống giữ lại bản trước đó. Khôi phục sẽ đưa nội dung vào editor, bạn vẫn cần bấm lưu để áp dụng.</p>
+              </div>
+
+              {versionsLoading ? (
+                <p className="text-sm text-zinc-500">Đang tải lịch sử...</p>
+              ) : versions.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-white/[0.1] p-8 text-center">
+                  <p className="text-sm font-semibold text-white">Chưa có phiên bản cũ</p>
+                  <p className="mt-1 text-xs text-zinc-500">Sau lần lưu tiếp theo, bản hiện tại sẽ được đưa vào lịch sử.</p>
+                </div>
+              ) : versions.map((version) => (
+                <div key={version.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-white">{version.post.title || "(Chưa có tiêu đề)"}</p>
+                      <p className="mt-1 text-xs text-zinc-500">{new Date(version.savedAt).toLocaleString("vi-VN")} · {words(version.post.content)} từ</p>
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-600">{version.post.excerpt || stripMarkdown(version.post.content).slice(0, 180)}</p>
+                    </div>
+                    <button onClick={() => {
+                      setEditPost(version.post);
+                      setView("write");
+                      showToast("Đã khôi phục phiên bản vào editor");
+                    }} className={btnSecondary + " text-xs"}>Khôi phục</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <aside className="space-y-5">
+          <div className={panelCls}>
+            <div className="border-b border-white/[0.06] px-5 py-4">
+              <h3 className="text-sm font-bold text-white">Autosave</h3>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs leading-5 text-zinc-500">
+                {draftSavedAt ? `Đã tự lưu lúc ${new Date(draftSavedAt).toLocaleTimeString("vi-VN")}` : "Đang chờ thay đổi để tự lưu."}
+              </p>
+              {draftCandidate ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                  <p className="text-xs font-bold text-amber-200">Có bản nháp chưa lưu</p>
+                  <p className="mt-1 text-[11px] text-zinc-500">{new Date(draftCandidate.savedAt).toLocaleString("vi-VN")}</p>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={() => {
+                      setEditPost(draftCandidate.post);
+                      setDraftCandidate(null);
+                      showToast("Đã phục hồi bản nháp");
+                    }} className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] font-bold text-amber-100">Phục hồi</button>
+                    <button onClick={() => clearDraft(originalSlug || editPost.slug)} className="rounded-lg bg-white/[0.05] px-3 py-1.5 text-[11px] font-bold text-zinc-400">Bỏ qua</button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
           <div className={panelCls}>
             <div className="border-b border-white/[0.06] px-5 py-4">
               <h3 className="text-sm font-bold text-white">Content Score</h3>

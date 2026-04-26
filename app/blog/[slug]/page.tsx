@@ -1,43 +1,151 @@
-"use client";
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import type { Metadata } from "next";
+import fs from "fs";
+import path from "path";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import MarkdownRenderer from "../../components/MarkdownRenderer";
 import { SITE_URL } from "../../lib/site";
 
 interface Post {
-  slug: string; title: string; cover: string; content: string; tags: string[]; status: string; createdAt: string;
-  excerpt?: string; category?: string; metaTitle?: string; metaDescription?: string; readingMinutes?: number;
+  slug: string;
+  title: string;
+  cover: string;
+  content: string;
+  tags: string[];
+  status: string;
+  createdAt: string;
+  excerpt?: string;
+  category?: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  canonicalUrl?: string;
+  scheduledAt?: string;
+  readingMinutes?: number;
 }
 
-export default function PostPage() {
-  const params = useParams();
-  const [post, setPost] = useState<Post | null>(null);
-  const [notFound, setNotFound] = useState(false);
+type Props = {
+  params: Promise<{ slug: string }>;
+};
 
-  useEffect(() => {
-    fetch("/api/posts").then(r => r.json()).then((posts: Post[]) => {
-      const found = posts.find(p => p.slug === params.slug);
-      if (found) setPost(found);
-      else setNotFound(true);
-    });
-  }, [params.slug]);
+const POSTS_DIR = path.join(process.cwd(), "data", "posts");
 
-  if (notFound) return (
-    <main className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <div className="text-center animate-fade-up">
-        <p className="text-5xl mb-4">😕</p>
-        <p className="text-base font-semibold mb-1">Bài viết không tồn tại</p>
-        <p className="text-sm mb-6" style={{ color: "var(--text-secondary)" }}>Bài viết này có thể đã bị xoá hoặc chưa được xuất bản.</p>
-        <Link href="/blog" className="inline-block px-6 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "var(--accent)" }}>← Về Blog</Link>
-      </div>
-    </main>
-  );
+function slugify(input: string) {
+  return input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90);
+}
 
-  if (!post) return <main className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></main>;
+function postPath(slug: string) {
+  const filePath = path.join(POSTS_DIR, `${slugify(slug)}.json`);
+  if (!filePath.startsWith(POSTS_DIR)) throw new Error("Invalid slug");
+  return filePath;
+}
+
+function stripMarkdown(content: string) {
+  return content
+    .replace(/!\[[^\]]*]\([^)]+\)/g, "")
+    .replace(/[#*_`>\-[\]().]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePost(post: Record<string, unknown>): Post {
+  const content = typeof post.content === "string" ? post.content : "";
+  return {
+    slug: typeof post.slug === "string" ? post.slug : "",
+    title: typeof post.title === "string" ? post.title : "",
+    cover: typeof post.cover === "string" ? post.cover : "",
+    content,
+    tags: Array.isArray(post.tags) ? post.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    status: typeof post.status === "string" ? post.status : "draft",
+    createdAt: typeof post.createdAt === "string" ? post.createdAt : new Date().toISOString(),
+    excerpt: typeof post.excerpt === "string" ? post.excerpt : stripMarkdown(content).slice(0, 156),
+    category: typeof post.category === "string" ? post.category : "Chia sẻ",
+    metaTitle: typeof post.metaTitle === "string" ? post.metaTitle : "",
+    metaDescription: typeof post.metaDescription === "string" ? post.metaDescription : "",
+    canonicalUrl: typeof post.canonicalUrl === "string" ? post.canonicalUrl : "",
+    scheduledAt: typeof post.scheduledAt === "string" ? post.scheduledAt : "",
+    readingMinutes: typeof post.readingMinutes === "number" ? post.readingMinutes : Math.max(1, Math.ceil(content.split(/\s+/).filter(Boolean).length / 220)),
+  };
+}
+
+function isPublicPost(post: Post) {
+  if (post.status !== "published") return false;
+  if (!post.scheduledAt) return true;
+  return new Date(post.scheduledAt).getTime() <= Date.now();
+}
+
+function getPost(slug: string) {
+  try {
+    const filePath = postPath(slug);
+    if (!fs.existsSync(filePath)) return null;
+    const post = normalizePost(JSON.parse(fs.readFileSync(filePath, "utf-8")));
+    return isPublicPost(post) ? post : null;
+  } catch {
+    return null;
+  }
+}
+
+function absoluteUrl(url: string) {
+  if (!url) return "";
+  try {
+    return new URL(url, SITE_URL).toString();
+  } catch {
+    return "";
+  }
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const post = getPost(slug);
+  if (!post) {
+    return {
+      title: "Bài viết không tồn tại",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const canonical = post.canonicalUrl || `${SITE_URL}/blog/${post.slug}`;
+  const description = post.metaDescription || post.excerpt || stripMarkdown(post.content).slice(0, 156);
+  const title = post.metaTitle || `${post.title} | Tùng Nguyễn`;
+  const image = absoluteUrl(post.cover);
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: "article",
+      publishedTime: post.createdAt,
+      tags: post.tags,
+      images: image ? [{ url: image, width: 1200, height: 630, alt: post.title }] : undefined,
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
+  };
+}
+
+export default async function PostPage({ params }: Props) {
+  const { slug } = await params;
+  const post = getPost(slug);
+  if (!post) notFound();
 
   const readTime = post.readingMinutes || Math.max(1, Math.ceil(post.content.split(/\s+/).length / 220));
-  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/blog/${post.slug}` : `${SITE_URL}/blog/${post.slug}`;
+  const shareUrl = `${SITE_URL}/blog/${post.slug}`;
   const shareLinks = [
     ["X", `https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}&url=${encodeURIComponent(shareUrl)}`],
     ["Facebook", `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`],
@@ -68,8 +176,8 @@ export default function PostPage() {
         <div className="flex flex-wrap items-center gap-3 mb-10 pb-6" style={{ borderBottom: "1px solid var(--border)" }}>
           <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>{new Date(post.createdAt).toLocaleDateString("vi-VN", { year: "numeric", month: "long", day: "numeric" })}</span>
           <span style={{ color: "var(--text-muted)" }}>·</span>
-          {post.tags.map((t, i) => (
-            <span key={i} className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>{t}</span>
+          {post.tags.map((tag) => (
+            <span key={tag} className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold" style={{ background: "var(--accent-dim)", color: "var(--accent)" }}>{tag}</span>
           ))}
         </div>
 

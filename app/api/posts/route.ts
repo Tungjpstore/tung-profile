@@ -3,9 +3,11 @@ import fs from "fs";
 import path from "path";
 
 const DIR = path.join(process.cwd(), "data", "posts");
+const VERSION_DIR = path.join(process.cwd(), "data", "post-versions");
 
 function ensureDir() {
   if (!fs.existsSync(DIR)) fs.mkdirSync(DIR, { recursive: true });
+  if (!fs.existsSync(VERSION_DIR)) fs.mkdirSync(VERSION_DIR, { recursive: true });
 }
 
 function getAllPosts() {
@@ -30,6 +32,24 @@ function postPath(slug: string) {
   const filePath = path.join(DIR, `${slugify(slug)}.json`);
   if (!filePath.startsWith(DIR)) throw new Error("Invalid slug");
   return filePath;
+}
+
+function versionPath(slug: string) {
+  const filePath = path.join(VERSION_DIR, `${slugify(slug)}.json`);
+  if (!filePath.startsWith(VERSION_DIR)) throw new Error("Invalid slug");
+  return filePath;
+}
+
+function saveVersion(slug: string, post: ReturnType<typeof normalizePost>) {
+  const filePath = versionPath(slug);
+  const existing = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, "utf-8")) : [];
+  const versions = Array.isArray(existing) ? existing : [];
+  versions.unshift({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    savedAt: new Date().toISOString(),
+    post,
+  });
+  fs.writeFileSync(filePath, JSON.stringify(versions.slice(0, 20), null, 2));
 }
 
 function readingMinutes(content: string) {
@@ -110,7 +130,8 @@ export async function PUT(request: Request) {
     const originalSlug = slugify(body.originalSlug || body.slug || nextSlug);
     const filePath = postPath(originalSlug);
     if (!fs.existsSync(filePath)) return NextResponse.json({ error: "Không tìm thấy" }, { status: 404 });
-    const existing = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const existing = normalizePost(JSON.parse(fs.readFileSync(filePath, "utf-8")));
+    saveVersion(originalSlug, existing);
     const updated = normalizePost({ ...existing, ...body, slug: nextSlug, updatedAt: new Date().toISOString() });
     fs.writeFileSync(postPath(nextSlug), JSON.stringify(updated, null, 2));
     if (nextSlug !== originalSlug && fs.existsSync(filePath)) fs.unlinkSync(filePath);
