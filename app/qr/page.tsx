@@ -1,18 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import QRGenerator from "../components/QRGenerator";
 import QRScanner from "../components/QRScanner";
 import QRHistory, { HistoryItem } from "../components/QRHistory";
 import { POPULAR_BANKS, generateVietQRText } from "../lib/vietqr";
 
-type QRType = "url" | "text" | "wifi" | "vcard" | "vietqr" | "phone" | "sms" | "email";
+const QR_TYPES = ["url", "text", "wifi", "vcard", "vietqr", "phone", "sms", "email"] as const;
+
+type QRType = (typeof QR_TYPES)[number];
 type ToolMode = "generate" | "scan";
+
+function isQRType(value: string | null): value is QRType {
+  return QR_TYPES.includes(value as QRType);
+}
 
 export default function QRPage() {
   const [mode, setMode] = useState<ToolMode>("generate");
   const [qrType, setQrType] = useState<QRType>("url");
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const params = new URLSearchParams(window.location.search);
+      const requestedMode = params.get("mode");
+      const requestedType = params.get("type");
+
+      if (requestedMode === "scan" || requestedMode === "generate") setMode(requestedMode);
+      if (isQRType(requestedType)) setQrType(requestedType);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   // Input Data States
   const [url, setUrl] = useState("https://tungnguyen.dev");

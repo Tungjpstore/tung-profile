@@ -56,8 +56,8 @@ interface Post {
   category?: string;
 }
 
-type TabType = "feed" | "info" | "projects" | "services" | "payment";
-type IconName = "bank" | "briefcase" | "calendar" | "check" | "code" | "copy" | "external" | "heart" | "home" | "mail" | "moon" | "share" | "sun" | "user" | "wallet";
+type TabType = "feed" | "info" | "projects" | "services" | "tools" | "payment";
+type IconName = "bank" | "briefcase" | "calendar" | "check" | "code" | "copy" | "external" | "heart" | "home" | "mail" | "moon" | "qr" | "share" | "sun" | "user" | "wallet";
 
 const ICONS: Record<IconName, string> = {
   bank: "M3 10h18 M5 10V8l7-4 7 4v2 M6 10v8 M10 10v8 M14 10v8 M18 10v8 M4 18h16 M3 21h18",
@@ -71,6 +71,7 @@ const ICONS: Record<IconName, string> = {
   home: "M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z",
   mail: "M4 5h16v14H4z M4 7l8 6 8-6",
   moon: "M21 13a8 8 0 1 1-10-10 7 7 0 0 0 10 10z",
+  qr: "M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M7 7h0 M17 7h0 M7 17h0 M14 14h2v2h-2z M18 14h2v6h-6v-2h4v-4z M14 20h0 M20 20h0",
   share: "M18 8a3 3 0 1 0-2.8-4H15a3 3 0 0 0 1 2.2L8.8 10a3 3 0 1 0 0 4l7.2 3.8A3 3 0 1 0 17 16l-7.2-3.8",
   sun: "M12 4V2 M12 22v-2 M4.93 4.93 3.52 3.52 M20.48 20.48l-1.41-1.41 M4 12H2 M22 12h-2 M4.93 19.07l-1.41 1.41 M20.48 3.52l-1.41 1.41 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z",
   user: "M20 21a8 8 0 0 0-16 0 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
@@ -196,7 +197,7 @@ export default function Home() {
         <div className="network-container topbar-inner">
           <Link href="/" className="brand-mark" aria-label={data.name}>TN</Link>
           <div className="topbar-actions">
-            <Link href="/qr" className="topbar-link">Tạo QR</Link>
+            <Link href="/qr" className="topbar-link topbar-link-priority" onClick={() => track("click", "QR topbar")}><Icon name="qr" /> Tạo QR</Link>
             <Link href="/blog" className="topbar-link">Blog</Link>
             <button className="icon-button" onClick={toggleTheme} aria-label={isDark ? "Bật giao diện sáng" : "Bật giao diện tối"}><Icon name={isDark ? "sun" : "moon"} /></button>
           </div>
@@ -260,6 +261,7 @@ export default function Home() {
               ["info", "Thông tin"],
               ["projects", "Dự án"],
               ["services", "Dịch vụ"],
+              ["tools", "Công cụ"],
               ["payment", "Thanh toán"],
             ].map(([id, label]) => (
               <button key={id} className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id as TabType)}>{label}</button>
@@ -376,6 +378,37 @@ export default function Home() {
                   </article>
                 );
               })}
+            </div>
+          )}
+
+          {activeTab === "tools" && (
+            <div className="content-grid tools-grid">
+              <article className="network-card qr-tool-card">
+                <div className="qr-tool-copy">
+                  <span className="tool-kicker"><Icon name="qr" /> Public QR Studio</span>
+                  <h2>QR cho mọi người</h2>
+                  <p>URL, Wi-Fi, vCard, VietQR, SMS, email và scanner ảnh/camera.</p>
+                  <div className="tag-strip">
+                    {['URL', 'Wi-Fi', 'vCard', 'VietQR', 'SMS', 'Email'].map((item) => <span key={item}>{item}</span>)}
+                  </div>
+                  <div className="share-row">
+                    <Link href="/qr" onClick={() => track("click", "Open public QR generator")}><Icon name="qr" /> Tạo QR</Link>
+                    <Link href="/qr?mode=scan" onClick={() => track("click", "Open public QR scanner")}>Quét QR</Link>
+                  </div>
+                </div>
+                <div className="qr-mini" aria-hidden="true">
+                  {Array.from({ length: 49 }, (_, index) => <span key={index} />)}
+                </div>
+              </article>
+
+              <article className="network-card tool-note-card">
+                <h2>Không cần đăng nhập</h2>
+                <p>Lịch sử lưu trong trình duyệt của người dùng; phần camera chỉ chạy khi họ cấp quyền.</p>
+                <div className="share-row">
+                  <Link href="/qr?type=vietqr" onClick={() => track("click", "Open public VietQR")}>VietQR</Link>
+                  <Link href="/qr?type=wifi" onClick={() => track("click", "Open public Wi-Fi QR")}>Wi-Fi QR</Link>
+                </div>
+              </article>
             </div>
           )}
 

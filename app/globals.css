@@ -448,7 +448,7 @@ body {
 
 .network-tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   border-top: 1px solid var(--border);
 }
 
@@ -484,8 +484,94 @@ body {
 .project-grid,
 .service-grid-social,
 .info-grid,
+.tools-grid,
 .payment-grid {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.tools-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+}
+
+.qr-tool-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 178px;
+  gap: 18px;
+  align-items: center;
+}
+
+.qr-tool-copy h2 {
+  margin-top: 10px;
+}
+
+.tool-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.qr-mini {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+  width: 178px;
+  aspect-ratio: 1;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  box-shadow: inset 0 0 0 8px white;
+}
+
+.qr-mini span {
+  border-radius: 2px;
+  background: transparent;
+}
+
+.qr-mini span:nth-child(1),
+.qr-mini span:nth-child(2),
+.qr-mini span:nth-child(3),
+.qr-mini span:nth-child(5),
+.qr-mini span:nth-child(6),
+.qr-mini span:nth-child(7),
+.qr-mini span:nth-child(8),
+.qr-mini span:nth-child(10),
+.qr-mini span:nth-child(12),
+.qr-mini span:nth-child(14),
+.qr-mini span:nth-child(15),
+.qr-mini span:nth-child(16),
+.qr-mini span:nth-child(17),
+.qr-mini span:nth-child(19),
+.qr-mini span:nth-child(20),
+.qr-mini span:nth-child(21),
+.qr-mini span:nth-child(22),
+.qr-mini span:nth-child(25),
+.qr-mini span:nth-child(26),
+.qr-mini span:nth-child(28),
+.qr-mini span:nth-child(30),
+.qr-mini span:nth-child(32),
+.qr-mini span:nth-child(34),
+.qr-mini span:nth-child(36),
+.qr-mini span:nth-child(37),
+.qr-mini span:nth-child(38),
+.qr-mini span:nth-child(41),
+.qr-mini span:nth-child(43),
+.qr-mini span:nth-child(45),
+.qr-mini span:nth-child(46),
+.qr-mini span:nth-child(49) {
+  background: #071014;
+}
+
+.tool-note-card {
+  align-content: start;
 }
 
 .network-card {
@@ -1069,8 +1155,14 @@ body {
 @media (max-width: 860px) {
   .info-grid,
   .project-grid,
-  .service-grid-social {
+  .service-grid-social,
+  .tools-grid,
+  .qr-tool-card {
     grid-template-columns: 1fr;
+  }
+
+  .qr-mini {
+    width: min(178px, 100%);
   }
 }
 
@@ -1107,11 +1199,12 @@ body {
   }
 
   .network-tabs {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
+    overflow-x: auto;
   }
 
   .network-tabs button {
-    min-width: 0;
+    min-width: 92px;
     min-height: 48px;
     padding: 0 4px;
     font-size: 11px;
@@ -1155,7 +1248,9 @@ body {
 .social-topbar { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
 .topbar-inner { height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
-.topbar-link { min-height: 38px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 800; text-decoration: none; }
+.topbar-link { min-height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 13px; font-weight: 800; text-decoration: none; }
+.topbar-link-priority { display: inline-flex; }
+.topbar-link.topbar-link-priority { display: inline-flex; gap: 7px; }
 
 .social-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-areas: "profile profile" "feed side"; gap: 14px; padding: 16px 0 40px; }
 .profile-card { grid-area: profile; overflow: hidden; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }

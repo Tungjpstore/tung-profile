@@ -18,6 +18,7 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const isCameraActiveRef = useRef(false);
 
   // Stop camera when component unmounts or mode changes
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute("playsinline", "true"); // required to tell iOS safari we don't want fullscreen
         videoRef.current.play();
+        isCameraActiveRef.current = true;
         setIsCameraActive(true);
         animationFrameRef.current = requestAnimationFrame(tickCamera);
       }
@@ -49,6 +51,7 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
   }
 
   function stopCamera() {
+    isCameraActiveRef.current = false;
     setIsCameraActive(false);
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -64,8 +67,8 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
   }
 
   function tickCamera() {
-    if (!videoRef.current || !canvasRef.current || !isCameraActive) {
-      if (isCameraActive) {
+    if (!videoRef.current || !canvasRef.current || !isCameraActiveRef.current) {
+      if (isCameraActiveRef.current) {
         animationFrameRef.current = requestAnimationFrame(tickCamera);
       }
       return;
