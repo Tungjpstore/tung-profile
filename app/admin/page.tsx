@@ -265,13 +265,13 @@ export default function AdminPage() {
   ];
 
   return (
-    <main className="admin-shell min-h-screen bg-[#07070a] text-white">
+    <main className="admin-shell">
       {/* Header */}
-      <header className="admin-header sticky top-0 z-40 bg-[#07070a]/80 backdrop-blur-2xl border-b border-white/[0.06]">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      <header className="admin-header">
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <Link href="/" className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold">TN</Link>
-            <div><p className="text-sm font-bold">Quản trị</p><p className="text-[11px] text-zinc-500">Chỉnh sửa trang cá nhân</p></div>
+            <Link href="/" className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white">TN</Link>
+            <div><p className="text-sm font-bold text-white">Quản trị</p><p className="text-[11px] text-zinc-500">Chỉnh sửa trang cá nhân</p></div>
           </div>
           <div className="flex items-center gap-3">
             <a href="/" target="_blank" className={btnSecondary + " text-xs"}>👁 Xem trang</a>
@@ -284,13 +284,13 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 flex gap-8">
+      <div className="admin-container max-w-7xl mx-auto w-full py-8 flex gap-8">
         {/* Sidebar */}
-        <nav className="admin-nav w-56 flex-shrink-0 hidden md:block">
-          <div className="sticky top-24 space-y-1">
+        <nav className="admin-nav rounded-2xl border border-white/[0.04] bg-white/[0.01]">
+          <div className="space-y-1">
             {tabs.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2.5 ${tab === t.id ? "bg-white/[0.08] text-white" : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03]"}`}>
+                className={`w-full text-left px-4 py-2.5 rounded-xl text-sm font-medium transition-all flex items-center gap-2.5 ${tab === t.id ? "active" : ""}`}>
                 <span className="text-base">{t.icon}</span>{t.label}
               </button>
             ))}
@@ -308,7 +308,7 @@ export default function AdminPage() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0 space-y-6 pb-20 md:pb-0">
+        <main className="admin-main flex-1 min-w-0 space-y-6 pb-20 md:pb-0">
           <section className="admin-overview">
             {[
               { label: "Bài viết", value: posts.length, hint: "blog/studio", icon: "📝" },
@@ -792,7 +792,7 @@ export default function AdminPage() {
               </Card>
             </>
           )}
-        </div>
+        </main>
       </div>
 
       {/* Toast */}

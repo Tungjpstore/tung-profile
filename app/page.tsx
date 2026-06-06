@@ -234,19 +234,29 @@ export default async function Home({ searchParams }: HomeProps) {
           </div>
 
           <div className="network-profile-body">
-            <div className="network-avatar">
-              {data.avatar ? (
-                <Image src={data.avatar} alt={data.name} width={140} height={140} unoptimized />
-              ) : (
-                <span>TN</span>
-              )}
+            {/* Pulsing Avatar with Glow Aura */}
+            <div className="relative w-[110px] h-[55px] z-10">
+              <div className="absolute -inset-1.5 rounded-[26px] bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] opacity-40 blur-md animate-pulse-glow" style={{ marginTop: "-55px" }} />
+              <div className="network-avatar relative">
+                {data.avatar ? (
+                  <Image src={data.avatar} alt={data.name} width={140} height={140} unoptimized className="object-cover" />
+                ) : (
+                  <span>TN</span>
+                )}
+              </div>
             </div>
 
             <div className="profile-mainline">
               <div>
-                <div className="name-with-age">
+                <div className="name-with-age flex items-center gap-3">
                   <h1>{data.name}</h1>
-                  <span>{age} tuổi</span>
+                  <span className="flex items-center gap-1.5 text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-full font-bold">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    Online
+                  </span>
                 </div>
                 <p>@tungnguyen · {data.tagline}</p>
               </div>
@@ -269,7 +279,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <Icon name="heart" /> {relationship}
               </span>
               <span>
-                <Icon name="check" /> Đang nhận dự án
+                <Icon name="check" /> {age} tuổi
               </span>
             </div>
 
@@ -331,7 +341,7 @@ export default async function Home({ searchParams }: HomeProps) {
                             src={post.cover}
                             alt=""
                             fill
-                            className="safe-image object-cover animate-fade-in"
+                            className="safe-image object-cover"
                             sizes="(max-width: 768px) 100vw, 800px"
                             unoptimized
                           />
@@ -414,6 +424,7 @@ export default async function Home({ searchParams }: HomeProps) {
                         width={720}
                         height={360}
                         className="project-image object-cover"
+                        unoptimized
                       />
                     ) : (
                       <div className="project-placeholder">
@@ -468,6 +479,7 @@ export default async function Home({ searchParams }: HomeProps) {
                         width={720}
                         height={280}
                         className="project-image object-cover"
+                        unoptimized
                       />
                     ) : null}
                     <div className="service-title">
@@ -522,7 +534,7 @@ export default async function Home({ searchParams }: HomeProps) {
                     </TrackableLink>
                   </div>
                 </div>
-                <div className="qr-mini" aria-hidden="true">
+                <div className="qr-mini animate-fade-in" aria-hidden="true">
                   {Array.from({ length: 49 }, (_, index) => (
                     <span key={index} />
                   ))}
