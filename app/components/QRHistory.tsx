@@ -60,55 +60,56 @@ export default function QRHistory({
 }: QRHistoryProps) {
   if (items.length === 0) {
     return (
-      <div className="w-full text-center py-10 text-zinc-500 text-xs">
-        <span className="text-3xl mb-3 block">📜</span>
-        Lịch sử trống. Hãy tạo một mã QR để lưu lại lịch sử ở đây.
+      <div className="w-full text-center py-12 text-[var(--text-dim)] text-xs border border-dashed rounded-2xl bg-black/5" style={{ borderColor: "var(--border)" }}>
+        <span className="text-3xl mb-3.5 block filter drop-shadow-[0_0_8px_rgba(255,255,255,0.05)]">📜</span>
+        Lịch sử trống. Hãy tạo mã QR để lưu lại ở đây.
       </div>
     );
   }
 
   return (
     <div className="w-full flex flex-col gap-4">
-      <div className="flex items-center justify-between border-b border-white/5 pb-2">
-        <span className="text-xs font-bold text-zinc-400">
+      <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: "var(--border)" }}>
+        <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-muted)]">
           Đã lưu ({items.length})
         </span>
         <button
           onClick={onClearAll}
-          className="text-[10px] font-bold text-red-400 hover:text-red-300 transition-colors"
+          className="text-[10px] font-black uppercase tracking-wider text-red-400 hover:text-red-300 transition-colors"
         >
           Xóa tất cả
         </button>
       </div>
 
-      <div className="grid gap-2 max-h-[400px] overflow-y-auto pr-1">
+      <div className="grid gap-2.5 max-h-[360px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
         {items.map((item) => (
           <div
             key={item.id}
-            className="group flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/10 transition-all text-left"
+            className="group flex items-center justify-between p-3 rounded-xl border transition-all text-left bg-white/[0.02] hover:bg-white/[0.04]"
+            style={{ borderColor: "var(--border)" }}
           >
             <button
               onClick={() => onLoadItem(item)}
               className="flex-1 flex items-start gap-3 min-w-0"
             >
-              <span className="text-xl p-1.5 rounded-lg bg-zinc-900 border border-white/5 flex-shrink-0">
+              <span className="text-lg p-2 rounded-xl bg-black/40 border flex-shrink-0 flex items-center justify-center aspect-square" style={{ borderColor: "var(--border)" }}>
                 {TYPE_EMOJIS[item.type] || "🎯"}
               </span>
               <div className="min-w-0 text-left">
-                <h4 className="text-xs font-bold truncate text-white leading-tight">
+                <h4 className="text-xs font-bold truncate text-[var(--text)] leading-tight">
                   {item.title || "Không có tiêu đề"}
                 </h4>
-                <p className="text-[10px] text-zinc-400 mt-1">
+                <p className="text-[10px] text-[var(--text-muted)] mt-1 font-semibold">
                   {TYPE_LABELS[item.type] || item.type}
                 </p>
-                <p className="text-[9px] text-zinc-500 mt-0.5 truncate max-w-[200px] sm:max-w-xs font-mono">
+                <p className="text-[9px] text-[var(--text-dim)] mt-0.5 truncate font-mono max-w-full">
                   {item.value}
                 </p>
               </div>
             </button>
 
             <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-              <span className="text-[9px] text-zinc-500 hidden sm:inline">
+              <span className="text-[9px] text-[var(--text-dim)] hidden sm:inline font-mono">
                 {new Date(item.date).toLocaleDateString("vi-VN", {
                   month: "numeric",
                   day: "numeric",
@@ -121,7 +122,7 @@ export default function QRHistory({
                   e.stopPropagation();
                   onDeleteItem(item.id);
                 }}
-                className="p-1 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-950/20 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="p-1.5 rounded-lg text-[var(--text-dim)] hover:text-red-400 hover:bg-red-950/20 transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
                 title="Xóa"
               >
                 <svg

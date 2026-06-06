@@ -292,10 +292,16 @@ export default function QRGenerator({
   ]);
 
   return (
-    <div className="relative flex items-center justify-center p-2 rounded-2xl overflow-hidden border border-white/5 bg-white/5 backdrop-blur-md max-w-full">
+    <div 
+      className="relative flex items-center justify-center p-3.5 rounded-2xl border transition-all duration-300 max-w-full bg-black/20"
+      style={{ 
+        boxShadow: "var(--glow-shadow)", 
+        borderColor: "color-mix(in srgb, var(--accent) 25%, var(--border))" 
+      }}
+    >
       <canvas
         ref={canvasRef}
-        className="w-full h-auto aspect-square max-w-[340px] sm:max-w-[380px] rounded-xl shadow-2xl transition-all duration-300"
+        className="w-full h-auto aspect-square max-w-[260px] sm:max-w-[320px] rounded-xl shadow-xl transition-all duration-300"
         style={{ imageRendering: "pixelated" }}
       />
     </div>

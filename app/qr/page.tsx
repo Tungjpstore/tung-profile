@@ -16,9 +16,14 @@ function isQRType(value: string | null): value is QRType {
   return QR_TYPES.includes(value as QRType);
 }
 
+const inputCls = "w-full px-4 py-3 rounded-xl border text-xs placeholder-zinc-500 focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-all outline-none";
+const selectCls = "w-full px-4 py-3 rounded-xl border text-xs focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/30 transition-all outline-none appearance-none cursor-pointer";
+const labelCls = "text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5";
+
 export default function QRPage() {
   const [mode, setMode] = useState<ToolMode>("generate");
   const [qrType, setQrType] = useState<QRType>("url");
+  const [isDesignOpen, setIsDesignOpen] = useState(false);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -28,6 +33,9 @@ export default function QRPage() {
 
       if (requestedMode === "scan" || requestedMode === "generate") setMode(requestedMode);
       if (isQRType(requestedType)) setQrType(requestedType);
+      
+      // Auto open design panel on desktop screens
+      setIsDesignOpen(window.innerWidth >= 1024);
     });
 
     return () => window.cancelAnimationFrame(frame);
@@ -77,21 +85,22 @@ export default function QRPage() {
   const [qrSize, setQrSize] = useState(512);
 
   // History State
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
-    if (typeof window !== "undefined") {
-      const savedHistory = window.localStorage.getItem("qr_history");
-      if (savedHistory) {
-        try {
-          return JSON.parse(savedHistory);
-        } catch (e) {
-          console.error("Failed to parse history", e);
-        }
-      }
-    }
-    return [];
-  });
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  // Load history client-side
+  useEffect(() => {
+    const savedHistory = window.localStorage.getItem("qr_history");
+    if (savedHistory) {
+      try {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error("Failed to parse history", e);
+      }
+    }
+  }, []);
 
   // Active Canvas Ref
   const [activeCanvas, setActiveCanvas] = useState<HTMLCanvasElement | null>(null);
@@ -304,7 +313,6 @@ export default function QRPage() {
       });
     } catch (err) {
       console.error("Failed to copy image", err);
-      // Fallback
       alert("Trình duyệt không hỗ trợ sao chép ảnh trực tiếp. Vui lòng bấm Tải xuống.");
     }
   };
@@ -322,53 +330,51 @@ export default function QRPage() {
   };
 
   return (
-    <main className="min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
+    <main className="min-h-screen pb-16" style={{ background: "var(--bg)", color: "var(--text)" }}>
       {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-2xl" style={{ background: "color-mix(in srgb, var(--bg) 80%, transparent)", borderBottom: "1px solid var(--border)" }}>
+      <header className="sticky top-0 z-40 backdrop-blur-2xl border-b" style={{ background: "color-mix(in srgb, var(--bg) 80%, transparent)", borderColor: "var(--border)" }}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 hover:opacity-70 transition-opacity">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white" style={{ background: "var(--accent)" }}>TN</div>
-            <span className="text-sm font-semibold hidden sm:block">Công cụ QR Code</span>
+          <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-all">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-black shadow-lg shadow-[var(--accent)]/20" style={{ background: "var(--accent)" }}>QR</div>
+            <span className="text-sm font-black tracking-tight bg-gradient-to-r from-white to-[var(--text-muted)] bg-clip-text text-transparent">Tung Nguyen QR</span>
           </Link>
-          <div className="flex gap-4">
-            <Link href="/blog" className="px-3 py-2 rounded-lg text-xs font-semibold hover:bg-white/5" style={{ color: "var(--text-secondary)" }}>
-              Blog
-            </Link>
-            <Link href="/" className="px-3 py-2 rounded-lg text-xs font-semibold hover:bg-white/5" style={{ color: "var(--text-secondary)" }}>
+          <div className="flex gap-2">
+            <Link href="/" className="px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all hover:bg-white/5" style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}>
               ← Trang chủ
             </Link>
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Page Title & Main Toggles */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border-b border-white/5 pb-8 animate-fade-up">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border-b pb-8 animate-fade-up" style={{ borderColor: "var(--border)" }}>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>Ứng dụng công cụ</p>
-            <h1 className="text-3xl font-black mb-2 tracking-tight">QR Code Utility</h1>
-            <p className="text-xs max-w-xl" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-[10px] font-black uppercase tracking-wider mb-1.5" style={{ color: "var(--accent)" }}>Ứng dụng công cụ</p>
+            <h1 className="text-3xl font-black mb-2 tracking-tight bg-gradient-to-r from-white to-[var(--text-muted)] bg-clip-text text-transparent">QR Code Studio</h1>
+            <p className="text-xs max-w-xl text-[var(--text-muted)] leading-relaxed">
               Tạo và tùy biến mã QR Code chất lượng cao hoặc sử dụng camera quét giải mã trực tuyến an toàn.
             </p>
           </div>
 
-          <div className="flex p-1 rounded-xl border border-white/5 bg-white/5 md:w-80">
+          {/* Premium Sliding Toggle */}
+          <div className="flex p-1 rounded-xl border bg-black/20 md:w-80 relative overflow-hidden" style={{ borderColor: "var(--border)" }}>
             <button
               onClick={() => setMode("generate")}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all relative z-10 ${
                 mode === "generate"
-                  ? "bg-white/10 text-white border border-white/5"
-                  : "text-zinc-400 hover:text-white"
+                  ? "text-black bg-[var(--accent)] shadow-md"
+                  : "text-[var(--text-muted)] hover:text-white"
               }`}
             >
               Tạo mã QR
             </button>
             <button
               onClick={() => setMode("scan")}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all relative z-10 ${
                 mode === "scan"
-                  ? "bg-white/10 text-white border border-white/5"
-                  : "text-zinc-400 hover:text-white"
+                  ? "text-black bg-[var(--accent)] shadow-md"
+                  : "text-[var(--text-muted)] hover:text-white"
               }`}
             >
               Quét mã QR
@@ -377,70 +383,73 @@ export default function QRPage() {
         </div>
 
         {mode === "generate" ? (
-          /* GENERATE MODE */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          /* GENERATE MODE - USING PURE CSS LAYOUT SHIFT FOR MOBILE ORDERING */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
             
-            {/* Input and Configuration Panel */}
-            <div className="lg:col-span-7 flex flex-col gap-6 animate-fade-up">
+            {/* Left wrapper - Behaves as individual grid children on mobile for flexible ordering */}
+            <div className="contents lg:flex lg:flex-col lg:gap-6 lg:col-span-7">
               
-              {/* QR Code Content Types Tab Panel */}
-              <div className="p-5 rounded-2xl border border-white/5" style={{ background: "var(--bg-card)" }}>
-                <h3 className="text-xs font-black uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>
+              {/* SECTION 1: QR Type Tabs & Input Fields (First on mobile) */}
+              <div className="order-1 lg:order-none glass-card p-5 md:p-6">
+                <h3 className="text-[10px] font-black uppercase tracking-wider mb-4 text-[var(--text-muted)] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
                   1. Chọn nội dung QR
                 </h3>
                 
-                {/* Horizontal tabs */}
-                <div className="flex flex-wrap gap-1.5 mb-6">
+                {/* Horizontal scrollable track on mobile, wrapped on desktop */}
+                <div className="flex flex-nowrap overflow-x-auto lg:flex-wrap gap-2 pb-3 mb-6 scrollbar-none -mx-4 px-4 lg:mx-0 lg:px-0 snap-x">
                   {[
-                    ["url", "🔗 URL"],
-                    ["text", "📝 Văn bản"],
-                    ["wifi", "📶 Wifi"],
-                    ["vcard", "📇 vCard"],
-                    ["vietqr", "💵 VietQR"],
-                    ["phone", "📞 Điện thoại"],
-                    ["sms", "💬 SMS"],
-                    ["email", "✉️ Email"],
-                  ].map(([type, label]) => (
+                    ["url", "🔗", "URL"],
+                    ["text", "📝", "Văn bản"],
+                    ["wifi", "📶", "Wifi"],
+                    ["vcard", "📇", "vCard"],
+                    ["vietqr", "💵", "VietQR"],
+                    ["phone", "📞", "SĐT"],
+                    ["sms", "💬", "SMS"],
+                    ["email", "✉️", "Email"],
+                  ].map(([type, icon, label]) => (
                     <button
                       key={type}
                       onClick={() => setQrType(type as QRType)}
-                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                      className={`flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex-shrink-0 snap-center border ${
                         qrType === type
-                          ? "bg-white/10 text-white border border-white/5"
-                          : "text-zinc-400 hover:text-white hover:bg-white/5"
+                          ? "text-black shadow-[0_0_12px_rgba(var(--accent-rgb),0.15)]"
+                          : "bg-white/5 border-transparent text-zinc-400 hover:text-white hover:bg-white/10"
                       }`}
+                      style={qrType === type ? { backgroundColor: "var(--accent)", borderColor: "var(--accent)" } : {}}
                     >
-                      {label}
+                      <span>{icon}</span>
+                      <span>{label}</span>
                     </button>
                   ))}
                 </div>
 
                 {/* Tab fields */}
-                <div className="mt-4">
+                <div className="mt-4 animate-fade-up">
                   {qrType === "url" && (
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Địa chỉ trang web (URL)</label>
+                      <label className={labelCls}>Địa chỉ trang web (URL)</label>
                       <input
                         type="url"
                         value={url}
                         onChange={(e) => setUrl(e.target.value)}
                         placeholder="https://example.com"
-                        className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                        style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                        className={inputCls}
+                        style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                       />
                     </div>
                   )}
 
                   {qrType === "text" && (
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Văn bản hoặc tin nhắn</label>
+                      <label className={labelCls}>Văn bản hoặc tin nhắn</label>
                       <textarea
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         placeholder="Nhập nội dung cần ghi vào QR..."
                         rows={4}
-                        className="p-3 rounded-xl text-xs outline-none w-full border resize-none"
-                        style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                        className={`${inputCls} resize-none`}
+                        style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                       />
                     </div>
                   )}
@@ -448,39 +457,42 @@ export default function QRPage() {
                   {qrType === "wifi" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1.5 sm:col-span-2">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Tên mạng (SSID)</label>
+                        <label className={labelCls}>Tên mạng (SSID)</label>
                         <input
                           type="text"
                           value={wifiSSID}
                           onChange={(e) => setWifiSSID(e.target.value)}
                           placeholder="Mạng Wifi nhà bạn"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Mật khẩu Wifi</label>
+                        <label className={labelCls}>Mật khẩu Wifi</label>
                         <input
                           type="password"
                           value={wifiPassword}
                           onChange={(e) => setWifiPassword(e.target.value)}
                           placeholder="Mật khẩu (nếu có)"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Bảo mật</label>
-                        <select
-                          value={wifiEncryption}
-                          onChange={(e) => setWifiEncryption(e.target.value as "WPA" | "WEP" | "nopass")}
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
-                        >
-                          <option value="WPA">WPA / WPA2</option>
-                          <option value="WEP">WEP</option>
-                          <option value="nopass">Không mật khẩu (Mở)</option>
-                        </select>
+                        <label className={labelCls}>Bảo mật</label>
+                        <div className="relative">
+                          <select
+                            value={wifiEncryption}
+                            onChange={(e) => setWifiEncryption(e.target.value as "WPA" | "WEP" | "nopass")}
+                            className={selectCls}
+                            style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
+                          >
+                            <option value="WPA">WPA / WPA2</option>
+                            <option value="WEP">WEP</option>
+                            <option value="nopass">Không bảo mật (Mở)</option>
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[var(--text-muted)]">▼</div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -488,80 +500,80 @@ export default function QRPage() {
                   {qrType === "vcard" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Tên</label>
+                        <label className={labelCls}>Tên</label>
                         <input
                           type="text"
                           value={vcardFirst}
                           onChange={(e) => setVcardFirst(e.target.value)}
-                          placeholder="Tùng"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          placeholder="Tên"
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Họ</label>
+                        <label className={labelCls}>Họ</label>
                         <input
                           type="text"
                           value={vcardLast}
                           onChange={(e) => setVcardLast(e.target.value)}
-                          placeholder="Nguyễn"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          placeholder="Họ"
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Số điện thoại</label>
+                        <label className={labelCls}>Số điện thoại</label>
                         <input
                           type="tel"
                           value={vcardPhone}
                           onChange={(e) => setVcardPhone(e.target.value)}
                           placeholder="0912345678"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Email</label>
+                        <label className={labelCls}>Email</label>
                         <input
                           type="email"
                           value={vcardEmail}
                           onChange={(e) => setVcardEmail(e.target.value)}
                           placeholder="contact@tungnguyen.dev"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Công ty</label>
+                        <label className={labelCls}>Công ty</label>
                         <input
                           type="text"
                           value={vcardCompany}
                           onChange={(e) => setVcardCompany(e.target.value)}
-                          placeholder="Tung Group"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          placeholder="Tên công ty"
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Chức danh</label>
+                        <label className={labelCls}>Chức danh</label>
                         <input
                           type="text"
                           value={vcardTitle}
                           onChange={(e) => setVcardTitle(e.target.value)}
-                          placeholder="Software Engineer"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          placeholder="Chức vụ"
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5 sm:col-span-2">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Website</label>
+                        <label className={labelCls}>Website</label>
                         <input
                           type="url"
                           value={vcardUrl}
                           onChange={(e) => setVcardUrl(e.target.value)}
-                          placeholder="https://tungnguyen.dev"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          placeholder="https://example.com"
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                     </div>
@@ -570,62 +582,65 @@ export default function QRPage() {
                   {qrType === "vietqr" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1.5 sm:col-span-2">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Ngân hàng hưởng thụ</label>
-                        <select
-                          value={vietqrBank}
-                          onChange={(e) => setVietqrBank(e.target.value)}
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
-                        >
-                          {POPULAR_BANKS.map(bank => (
-                            <option key={bank.bin} value={bank.bin}>
-                              {bank.shortName} - {bank.name}
-                            </option>
-                          ))}
-                        </select>
+                        <label className={labelCls}>Ngân hàng thụ hưởng</label>
+                        <div className="relative">
+                          <select
+                            value={vietqrBank}
+                            onChange={(e) => setVietqrBank(e.target.value)}
+                            className={selectCls}
+                            style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
+                          >
+                            {POPULAR_BANKS.map(bank => (
+                              <option key={bank.bin} value={bank.bin}>
+                                {bank.shortName} - {bank.name}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[var(--text-muted)]">▼</div>
+                        </div>
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Số tài khoản</label>
+                        <label className={labelCls}>Số tài khoản</label>
                         <input
                           type="text"
                           value={vietqrAccount}
                           onChange={(e) => setVietqrAccount(e.target.value)}
                           placeholder="Nhập số tài khoản ngân hàng"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Tên chủ tài khoản (Không dấu)</label>
+                        <label className={labelCls}>Tên chủ tài khoản (Không dấu)</label>
                         <input
                           type="text"
                           value={vietqrHolder}
                           onChange={(e) => setVietqrHolder(e.target.value.toUpperCase())}
                           placeholder="NGUYEN VAN A"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Số tiền (VND - Tùy chọn)</label>
+                        <label className={labelCls}>Số tiền (VND - Tùy chọn)</label>
                         <input
                           type="number"
                           value={vietqrAmount}
                           onChange={(e) => setVietqrAmount(e.target.value)}
                           placeholder="Ví dụ: 50000"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Nội dung chuyển khoản (Tùy chọn)</label>
+                        <label className={labelCls}>Nội dung chuyển khoản (Tùy chọn)</label>
                         <input
                           type="text"
                           value={vietqrMemo}
                           onChange={(e) => setVietqrMemo(e.target.value)}
                           placeholder="Ví dụ: Chuyển tiền cà phê"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                     </div>
@@ -633,14 +648,14 @@ export default function QRPage() {
 
                   {qrType === "phone" && (
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Số điện thoại</label>
+                      <label className={labelCls}>Số điện thoại</label>
                       <input
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="Ví dụ: +84912345678"
-                        className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                        style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                        className={inputCls}
+                        style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                       />
                     </div>
                   )}
@@ -648,25 +663,25 @@ export default function QRPage() {
                   {qrType === "sms" && (
                     <div className="grid grid-cols-1 gap-4">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Số điện thoại nhận SMS</label>
+                        <label className={labelCls}>Số điện thoại nhận SMS</label>
                         <input
                           type="tel"
                           value={smsPhone}
                           onChange={(e) => setSmsPhone(e.target.value)}
                           placeholder="Ví dụ: +84912345678"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Nội dung tin nhắn</label>
+                        <label className={labelCls}>Nội dung tin nhắn</label>
                         <textarea
                           value={smsMessage}
                           onChange={(e) => setSmsMessage(e.target.value)}
                           placeholder="Nội dung SMS được nhập sẵn..."
                           rows={3}
-                          className="p-3 rounded-xl text-xs outline-none w-full border resize-none"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={`${inputCls} resize-none`}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                     </div>
@@ -675,36 +690,36 @@ export default function QRPage() {
                   {qrType === "email" && (
                     <div className="grid grid-cols-1 gap-4">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Địa chỉ email nhận</label>
+                        <label className={labelCls}>Địa chỉ email nhận</label>
                         <input
                           type="email"
                           value={emailAddress}
                           onChange={(e) => setEmailAddress(e.target.value)}
                           placeholder="admin@example.com"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Tiêu đề email</label>
+                        <label className={labelCls}>Tiêu đề email</label>
                         <input
                           type="text"
                           value={emailSubject}
                           onChange={(e) => setEmailSubject(e.target.value)}
                           placeholder="Tiêu đề thư viết sẵn"
-                          className="min-h-[42px] px-3 rounded-xl text-xs outline-none w-full border"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={inputCls}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold" style={{ color: "var(--text-secondary)" }}>Nội dung thư</label>
+                        <label className={labelCls}>Nội dung thư</label>
                         <textarea
                           value={emailBody}
                           onChange={(e) => setEmailBody(e.target.value)}
                           placeholder="Nội dung email viết sẵn..."
                           rows={3}
-                          className="p-3 rounded-xl text-xs outline-none w-full border resize-none"
-                          style={{ background: "var(--bg-input)", borderColor: "var(--border)", color: "var(--text)" }}
+                          className={`${inputCls} resize-none`}
+                          style={{ background: "rgba(0, 0, 0, 0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                         />
                       </div>
                     </div>
@@ -712,264 +727,282 @@ export default function QRPage() {
                 </div>
               </div>
 
-              {/* Design Customizations Panel */}
-              <div className="p-5 rounded-2xl border border-white/5" style={{ background: "var(--bg-card)" }}>
-                <h3 className="text-xs font-black uppercase tracking-wider mb-5" style={{ color: "var(--text-secondary)" }}>
-                  2. Tùy chỉnh thiết kế QR
-                </h3>
+              {/* SECTION 3: Advanced Customization Accordion (Third on mobile) */}
+              <div className="order-3 lg:order-none glass-card overflow-hidden">
+                <button
+                  onClick={() => setIsDesignOpen(!isDesignOpen)}
+                  className="w-full p-5 flex items-center justify-between font-black text-xs uppercase tracking-wider text-left transition-colors hover:bg-white/5 border-b"
+                  style={{ color: "var(--text)", borderColor: "var(--border)" }}
+                >
+                  <span className="flex items-center gap-2">
+                    🎨 2. Tùy chỉnh thiết kế QR
+                  </span>
+                  <span className={`transform transition-transform duration-200 text-[10px] ${isDesignOpen ? 'rotate-180' : ''}`} style={{ color: "var(--accent)" }}>
+                    ▼
+                  </span>
+                </button>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {/* Color Pickers */}
-                  <div className="flex flex-col gap-4">
-                    <span className="text-[11px] font-bold block" style={{ color: "var(--text-secondary)" }}>Màu sắc mã QR</span>
-                    
-                    {/* Fg color picker */}
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-white/10">
-                        <input
-                          type="color"
-                          value={fgColor}
-                          onChange={(e) => setFgColor(e.target.value)}
-                          className="absolute inset-0 w-full h-full scale-150 cursor-pointer border-0 p-0"
-                        />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-zinc-400 font-bold">Màu QR (Foreground)</span>
-                        <span className="text-xs font-semibold font-mono">{fgColor}</span>
-                      </div>
-                    </div>
-
-                    {/* Gradient controls */}
-                    <div className="flex flex-col gap-2 mt-2">
-                      <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={gradient}
-                          onChange={(e) => setGradient(e.target.checked)}
-                          className="rounded border-zinc-700 bg-zinc-900 text-cyan-600 focus:ring-cyan-500"
-                        />
-                        Sử dụng màu Gradient (Chuyển sắc)
-                      </label>
-
-                      {gradient && (
-                        <div className="pl-6 flex flex-col gap-3 animate-fade-up">
-                          <div className="flex items-center gap-3">
-                            <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-white/10">
-                              <input
-                                type="color"
-                                value={gradientColor}
-                                onChange={(e) => setGradientColor(e.target.value)}
-                                className="absolute inset-0 w-full h-full scale-150 cursor-pointer border-0 p-0"
-                              />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-[10px] text-zinc-400 font-bold">Màu kết thúc Gradient</span>
-                              <span className="text-xs font-semibold font-mono">{gradientColor}</span>
-                            </div>
+                {isDesignOpen && (
+                  <div className="p-5 md:p-6 flex flex-col gap-6 animate-fade-up">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      {/* Color Pickers */}
+                      <div className="flex flex-col gap-4">
+                        <span className={labelCls}>Màu sắc mã QR</span>
+                        
+                        {/* Fg color picker */}
+                        <div className="flex items-center gap-3">
+                          <div className="relative w-9 h-9 rounded-xl overflow-hidden border" style={{ borderColor: "var(--border)" }}>
+                            <input
+                              type="color"
+                              value={fgColor}
+                              onChange={(e) => setFgColor(e.target.value)}
+                              className="absolute inset-0 w-full h-full scale-150 cursor-pointer border-0 p-0"
+                            />
                           </div>
-
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[10px] text-zinc-500 font-bold">Kiểu Gradient</span>
-                            <div className="flex gap-2">
-                              {["vertical", "horizontal", "diagonal"].map((type) => (
-                                <button
-                                  key={type}
-                                  onClick={() => setGradientType(type as "vertical" | "horizontal" | "diagonal")}
-                                  className={`py-1 px-2.5 rounded-md text-[10px] font-bold border transition-all ${
-                                    gradientType === type
-                                      ? "border-cyan-500 bg-cyan-950/20 text-cyan-400"
-                                      : "border-white/5 bg-white/5 text-zinc-400"
-                                  }`}
-                                >
-                                  {type === "vertical" ? "Dọc" : type === "horizontal" ? "Ngang" : "Chéo"}
-                                </button>
-                              ))}
-                            </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-[var(--text-muted)] font-bold">Màu QR (Foreground)</span>
+                            <span className="text-xs font-semibold font-mono" style={{ color: "var(--text)" }}>{fgColor}</span>
                           </div>
                         </div>
-                      )}
+
+                        {/* Gradient controls */}
+                        <div className="flex flex-col gap-2.5 mt-2">
+                          <label className="flex items-center gap-2.5 text-xs font-semibold cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={gradient}
+                              onChange={(e) => setGradient(e.target.checked)}
+                              className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 focus:ring-0 accent-[var(--accent)]"
+                            />
+                            Sử dụng màu Gradient (Chuyển sắc)
+                          </label>
+
+                          {gradient && (
+                            <div className="pl-6 flex flex-col gap-3 animate-fade-up">
+                              <div className="flex items-center gap-3">
+                                <div className="relative w-9 h-9 rounded-xl overflow-hidden border" style={{ borderColor: "var(--border)" }}>
+                                  <input
+                                    type="color"
+                                    value={gradientColor}
+                                    onChange={(e) => setGradientColor(e.target.value)}
+                                    className="absolute inset-0 w-full h-full scale-150 cursor-pointer border-0 p-0"
+                                  />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] text-[var(--text-muted)] font-bold">Màu kết thúc Gradient</span>
+                                  <span className="text-xs font-semibold font-mono" style={{ color: "var(--text)" }}>{gradientColor}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-[10px] text-[var(--text-dim)] font-bold uppercase">Kiểu Gradient</span>
+                                <div className="flex gap-2">
+                                  {["vertical", "horizontal", "diagonal"].map((type) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => setGradientType(type as "vertical" | "horizontal" | "diagonal")}
+                                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                        gradientType === type
+                                          ? "text-black border-transparent"
+                                          : "bg-white/5 border-transparent text-zinc-400"
+                                      }`}
+                                      style={gradientType === type ? { backgroundColor: "var(--accent)" } : {}}
+                                    >
+                                      {type === "vertical" ? "Dọc" : type === "horizontal" ? "Ngang" : "Chéo"}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Bg color picker */}
+                        <div className="flex items-center gap-3 mt-2">
+                          <div className="relative w-9 h-9 rounded-xl overflow-hidden border" style={{ borderColor: "var(--border)" }}>
+                            <input
+                              type="color"
+                              value={bgColor}
+                              onChange={(e) => setBgColor(e.target.value)}
+                              className="absolute inset-0 w-full h-full scale-150 cursor-pointer border-0 p-0"
+                            />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-[var(--text-muted)] font-bold">Màu Nền (Background)</span>
+                            <span className="text-xs font-semibold font-mono" style={{ color: "var(--text)" }}>{bgColor}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Shapes Config */}
+                      <div className="flex flex-col gap-4">
+                        <span className={labelCls}>Hình dạng & Hoạ tiết</span>
+                        
+                        {/* Dot shape select */}
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] text-[var(--text-muted)] font-bold">Kiểu chấm dữ liệu (Dots)</label>
+                          <div className="flex gap-2">
+                            {["square", "rounded", "circular"].map((style) => (
+                              <button
+                                key={style}
+                                onClick={() => setDotStyle(style as "square" | "rounded" | "circular")}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${
+                                  dotStyle === style
+                                    ? "text-black border-transparent"
+                                    : "bg-white/5 border-transparent text-zinc-400"
+                                }`}
+                                style={dotStyle === style ? { backgroundColor: "var(--accent)" } : {}}
+                              >
+                                {style === "square" ? "Vuông" : style === "rounded" ? "Bo góc" : "Tròn"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Eye shape select */}
+                        <div className="flex flex-col gap-1.5 mt-1">
+                          <label className="text-[10px] text-[var(--text-muted)] font-bold">Kiểu góc định vị (Finders)</label>
+                          <div className="flex gap-2">
+                            {["square", "rounded", "circle"].map((style) => (
+                              <button
+                                key={style}
+                                onClick={() => setEyeStyle(style as "square" | "rounded" | "circle")}
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${
+                                  eyeStyle === style
+                                    ? "text-black border-transparent"
+                                    : "bg-white/5 border-transparent text-zinc-400"
+                                }`}
+                                style={eyeStyle === style ? { backgroundColor: "var(--accent)" } : {}}
+                              >
+                                {style === "square" ? "Vuông" : style === "rounded" ? "Bo góc" : "Tròn"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Resolution slider */}
+                        <div className="flex flex-col gap-1.5 mt-1">
+                          <label className="text-[10px] text-[var(--text-muted)] font-bold flex justify-between">
+                            <span>Độ phân giải tải xuống</span>
+                            <span className="font-mono font-bold" style={{ color: "var(--accent)" }}>{qrSize}x{qrSize} px</span>
+                          </label>
+                          <input
+                            type="range"
+                            min="256"
+                            max="1024"
+                            step="128"
+                            value={qrSize}
+                            onChange={(e) => setQrSize(Number(e.target.value))}
+                            className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Bg color picker */}
-                    <div className="flex items-center gap-3 mt-2">
-                      <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-white/10">
-                        <input
-                          type="color"
-                          value={bgColor}
-                          onChange={(e) => setBgColor(e.target.value)}
-                          className="absolute inset-0 w-full h-full scale-150 cursor-pointer border-0 p-0"
-                        />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-zinc-400 font-bold">Màu Nền (Background)</span>
-                        <span className="text-xs font-semibold font-mono">{bgColor}</span>
+                    {/* Logo Uploader Option (Nested in Customize section for cleaner spacing) */}
+                    <div className="border-t pt-5" style={{ borderColor: "var(--border)" }}>
+                      <span className={labelCls}>3. Thêm Logo vào trung tâm (Tùy chọn)</span>
+                      
+                      <div className="flex flex-col sm:flex-row gap-5 items-center mt-3">
+                        <div className="flex-1 flex flex-col gap-2.5 w-full">
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => document.getElementById("logo-file-input")?.click()}
+                              className="py-2 px-4 rounded-xl text-xs font-bold border transition-all hover:bg-white/5"
+                              style={{ background: "rgba(0, 0, 0, 0.2)", borderColor: "var(--border)", color: "var(--text)" }}
+                            >
+                              Chọn file logo
+                            </button>
+                            <input
+                              type="file"
+                              id="logo-file-input"
+                              onChange={handleLogoUpload}
+                              accept="image/*"
+                              className="hidden"
+                            />
+                            {logoSrc && (
+                              <button
+                                onClick={() => setLogoSrc(undefined)}
+                                className="text-xs font-bold text-red-400 hover:text-red-300"
+                              >
+                                Xóa logo
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-[var(--text-dim)] leading-relaxed">
+                            Hỗ trợ định dạng PNG, JPG. QR Code sẽ tự động bật sửa lỗi mức độ cao (H) để bảo đảm quét nhạy sau khi chèn ảnh logo.
+                          </p>
+                        </div>
+
+                        {logoSrc && (
+                          <div className="flex flex-col gap-2 items-center flex-shrink-0 w-32 animate-fade-up">
+                            <div className="w-16 h-16 rounded-xl border bg-black/30 flex items-center justify-center p-1.5 overflow-hidden" style={{ borderColor: "var(--border)" }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={logoSrc} alt="Logo preview" className="max-w-full max-h-full object-contain rounded-lg" />
+                            </div>
+                            <div className="w-full flex flex-col gap-1.5">
+                              <span className="text-[9px] text-[var(--text-muted)] font-bold text-center">Cỡ logo: {(logoSize * 100).toFixed(0)}%</span>
+                              <input
+                                type="range"
+                                min="0.10"
+                                max="0.20"
+                                step="0.02"
+                                value={logoSize}
+                                onChange={(e) => setLogoSize(Number(e.target.value))}
+                                className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-
-                  {/* Shapes Config */}
-                  <div className="flex flex-col gap-4">
-                    <span className="text-[11px] font-bold block" style={{ color: "var(--text-secondary)" }}>Hình dạng & Hoạ tiết</span>
-                    
-                    {/* Dot shape select */}
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] text-zinc-400 font-bold">Kiểu chấm dữ liệu (Dots)</label>
-                      <div className="flex gap-2">
-                        {["square", "rounded", "circular"].map((style) => (
-                          <button
-                            key={style}
-                            onClick={() => setDotStyle(style as "square" | "rounded" | "circular")}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                              dotStyle === style
-                                ? "border-cyan-500 bg-cyan-950/20 text-cyan-400"
-                                : "border-white/5 bg-white/5 text-zinc-400"
-                            }`}
-                          >
-                            {style === "square" ? "Vuông" : style === "rounded" ? "Bo góc" : "Tròn"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Eye shape select */}
-                    <div className="flex flex-col gap-1.5 mt-1">
-                      <label className="text-[10px] text-zinc-400 font-bold">Kiểu góc định vị (Eyes / Finders)</label>
-                      <div className="flex gap-2">
-                        {["square", "rounded", "circle"].map((style) => (
-                          <button
-                            key={style}
-                            onClick={() => setEyeStyle(style as "square" | "rounded" | "circle")}
-                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                              eyeStyle === style
-                                ? "border-cyan-500 bg-cyan-950/20 text-cyan-400"
-                                : "border-white/5 bg-white/5 text-zinc-400"
-                            }`}
-                          >
-                            {style === "square" ? "Vuông" : style === "rounded" ? "Bo góc" : "Tròn"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Resolution slider */}
-                    <div className="flex flex-col gap-1.5 mt-1">
-                      <label className="text-[10px] text-zinc-400 font-bold flex justify-between">
-                        <span>Độ phân giải tải xuống</span>
-                        <span className="font-mono text-cyan-400 font-bold">{qrSize}x{qrSize} px</span>
-                      </label>
-                      <input
-                        type="range"
-                        min="256"
-                        max="1024"
-                        step="128"
-                        value={qrSize}
-                        onChange={(e) => setQrSize(Number(e.target.value))}
-                        className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Logo Upload Panel */}
-              <div className="p-5 rounded-2xl border border-white/5" style={{ background: "var(--bg-card)" }}>
-                <h3 className="text-xs font-black uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>
-                  3. Thêm Logo vào trung tâm (Tùy chọn)
-                </h3>
-
-                <div className="flex flex-col sm:flex-row gap-5 items-center">
-                  <div className="flex-1 flex flex-col gap-3 w-full">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => document.getElementById("logo-file-input")?.click()}
-                        className="py-2 px-4 rounded-xl text-xs font-semibold transition-all"
-                        style={{ background: "var(--surface-strong)", border: "1px solid var(--border)", color: "var(--text)" }}
-                      >
-                        Chọn file logo
-                      </button>
-                      <input
-                        type="file"
-                        id="logo-file-input"
-                        onChange={handleLogoUpload}
-                        accept="image/*"
-                        className="hidden"
-                      />
-                      {logoSrc && (
-                        <button
-                          onClick={() => setLogoSrc(undefined)}
-                          className="text-xs font-bold text-red-400 hover:text-red-300"
-                        >
-                          Xóa logo
-                        </button>
-                      )}
-                    </div>
-                    
-                    <p className="text-[10px] text-zinc-500 leading-normal">
-                      Hỗ trợ định dạng PNG, JPG. Hệ thống sẽ tự động chuyển cấp độ sửa lỗi QR lên cao nhất (H) để đảm bảo chất lượng quét sau khi chèn logo.
-                    </p>
-                  </div>
-
-                  {logoSrc && (
-                    <div className="flex flex-col gap-2 items-center flex-shrink-0 w-32 animate-fade-up">
-                      <div className="w-16 h-16 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center p-1.5 overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={logoSrc} alt="Logo preview" className="max-w-full max-h-full object-contain rounded-lg" />
-                      </div>
-                      <div className="w-full flex flex-col gap-1">
-                        <span className="text-[9px] text-zinc-400 font-bold text-center">Cỡ: {(logoSize * 100).toFixed(0)}%</span>
-                        <input
-                          type="range"
-                          min="0.10"
-                          max="0.20"
-                          step="0.02"
-                          value={logoSize}
-                          onChange={(e) => setLogoSize(Number(e.target.value))}
-                          className="w-full h-1 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             </div>
 
-            {/* Live Preview & Actions Panel */}
-            <div className="lg:col-span-5 flex flex-col gap-6 lg:sticky lg:top-24 animate-fade-up">
+            {/* Right wrapper - Behaves as individual grid children on mobile for flexible ordering */}
+            <div className="contents lg:flex lg:flex-col lg:gap-6 lg:col-span-5 lg:sticky lg:top-24">
               
-              {/* Live Preview Card */}
-              <div className="p-6 rounded-2xl border border-white/5 flex flex-col items-center gap-6" style={{ background: "var(--bg-card)" }}>
+              {/* SECTION 2: Live Preview & Actions Panel (Second on mobile) */}
+              <div className="order-2 lg:order-none glass-card p-6 flex flex-col items-center gap-6">
                 <div className="w-full text-center">
-                  <h3 className="text-xs font-black uppercase tracking-wider mb-1" style={{ color: "var(--text-secondary)" }}>
+                  <h3 className="text-[10px] font-black uppercase tracking-wider mb-1.5 text-[var(--text-muted)]">
                     Bản Xem Trước (Live Preview)
                   </h3>
-                  <p className="text-[10px] text-zinc-500 font-mono truncate max-w-full" title={qrValue}>
-                    {qrValue}
-                  </p>
+                  <div className="p-2 bg-black/10 rounded-lg max-w-full overflow-hidden">
+                    <p className="text-[9px] text-[var(--text-dim)] font-mono truncate max-w-full" title={qrValue}>
+                      {qrValue}
+                    </p>
+                  </div>
                 </div>
 
-                {/* The Generator Canvas wrapper */}
-                <QRGenerator
-                  value={qrValue}
-                  fgColor={fgColor}
-                  bgColor={bgColor}
-                  gradient={gradient}
-                  gradientColor={gradientColor}
-                  gradientType={gradientType}
-                  dotStyle={dotStyle}
-                  eyeStyle={eyeStyle}
-                  logoSrc={logoSrc}
-                  logoSize={logoSize}
-                  errorCorrectionLevel="M"
-                  size={qrSize}
-                  includeMargin={true}
-                  onCanvasReady={setActiveCanvas}
-                />
+                {/* The Generator Canvas Wrapper */}
+                <div className="relative group p-1 rounded-2xl overflow-hidden transition-all duration-300">
+                  <QRGenerator
+                    value={qrValue}
+                    fgColor={fgColor}
+                    bgColor={bgColor}
+                    gradient={gradient}
+                    gradientColor={gradientColor}
+                    gradientType={gradientType}
+                    dotStyle={dotStyle}
+                    eyeStyle={eyeStyle}
+                    logoSrc={logoSrc}
+                    logoSize={logoSize}
+                    errorCorrectionLevel="M"
+                    size={qrSize}
+                    includeMargin={true}
+                    onCanvasReady={setActiveCanvas}
+                  />
+                </div>
 
-                {/* Primary Actions */}
+                {/* Primary Action Buttons */}
                 <div className="w-full flex flex-col gap-2.5 mt-2">
                   <button
                     onClick={downloadQR}
-                    className="w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold text-black transition-all shadow-lg shadow-white/5 hover:bg-zinc-200 bg-white"
+                    className="w-full min-h-[44px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold text-black transition-all shadow-lg hover:opacity-90 active:scale-[0.98] select-none"
+                    style={{ backgroundColor: "var(--accent)" }}
                   >
                     📥 Tải ảnh QR (.PNG)
                   </button>
@@ -977,26 +1010,27 @@ export default function QRPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={copyCanvasToClipboard}
-                      className="flex-1 min-h-[40px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold border transition-all"
-                      style={{ background: "var(--surface-strong)", borderColor: "var(--border)", color: "var(--text)" }}
+                      className="flex-1 min-h-[42px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold border transition-all hover:bg-white/5 active:scale-[0.98]"
+                      style={{ background: "rgba(0,0,0,0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                     >
-                      📋 {copied ? "Đã sao chép ảnh!" : "Sao chép ảnh"}
+                      📋 {copied ? "Đã sao chép!" : "Sao chép ảnh"}
                     </button>
                     
                     <button
                       onClick={() => saveToHistory()}
-                      className="flex-1 min-h-[40px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold border transition-all"
-                      style={{ background: "var(--surface-strong)", borderColor: "var(--border)", color: "var(--text)" }}
+                      className="flex-1 min-h-[42px] flex items-center justify-center gap-2 rounded-xl text-xs font-bold border transition-all hover:bg-white/5 active:scale-[0.98]"
+                      style={{ background: "rgba(0,0,0,0.15)", borderColor: "var(--border)", color: "var(--text)" }}
                     >
-                      💾 {saved ? "Đã lưu!" : "Lưu vào lịch sử"}
+                      💾 {saved ? "Đã lưu!" : "Lưu lịch sử"}
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* History Panel */}
-              <div className="p-6 rounded-2xl border border-white/5" style={{ background: "var(--bg-card)" }}>
-                <h3 className="text-xs font-black uppercase tracking-wider mb-4" style={{ color: "var(--text-secondary)" }}>
+              {/* SECTION 4: History Panel (Fourth on mobile) */}
+              <div className="order-4 lg:order-none glass-card p-5 md:p-6">
+                <h3 className="text-[10px] font-black uppercase tracking-wider mb-4 text-[var(--text-muted)] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
                   Lịch sử mã QR đã tạo
                 </h3>
                 <QRHistory
@@ -1011,18 +1045,19 @@ export default function QRPage() {
           </div>
         ) : (
           /* SCAN MODE */
-          <div className="max-w-2xl mx-auto p-6 rounded-2xl border border-white/5 animate-fade-up" style={{ background: "var(--bg-card)" }}>
-            <div className="text-center mb-6">
-              <h3 className="text-xs font-black uppercase tracking-wider mb-2" style={{ color: "var(--text-secondary)" }}>
-                Trình Quét Giải Mã QR Code (QR Scanner)
-              </h3>
-              <p className="text-xs text-zinc-500 max-w-md mx-auto leading-relaxed">
-                Tải lên một bức ảnh có chứa mã QR hoặc bật máy ảnh của bạn để hệ thống tự động nhận diện và đọc thông tin tức thì.
+          <div className="max-w-2xl mx-auto glass-card p-6 md:p-8 animate-fade-up">
+            <div className="text-center mb-8">
+              <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                QR Scanner
+              </span>
+              <h2 className="text-2xl font-black mt-3 mb-2 tracking-tight">Trình Quét Giải Mã QR</h2>
+              <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
+                Tải ảnh chứa mã QR lên hoặc bật camera để tự động quét & giải mã trực tuyến an toàn.
               </p>
             </div>
             
             <QRScanner onScanResult={(text) => {
-              console.log("Scanned:", text);
+              console.log("Scanned QR:", text);
             }} />
           </div>
         )}

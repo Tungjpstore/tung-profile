@@ -172,17 +172,18 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
   return (
     <div className="w-full flex flex-col items-center gap-6">
       {/* Scanner Mode Tabs */}
-      <div className="flex gap-2 p-1.5 rounded-xl border border-white/5 bg-white/5 w-full max-w-md">
+      <div className="flex p-1 rounded-xl border bg-black/20 w-full max-w-md" style={{ borderColor: "var(--border)" }}>
         <button
           onClick={() => {
             setScanMode("file");
             stopCamera();
           }}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
             scanMode === "file"
-              ? "bg-white/10 text-white border border-white/5"
-              : "text-zinc-400 hover:text-white"
+              ? "text-black font-black"
+              : "text-[var(--text-muted)] hover:text-white"
           }`}
+          style={scanMode === "file" ? { backgroundColor: "var(--accent)" } : {}}
         >
           Tải ảnh lên
         </button>
@@ -191,24 +192,25 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
             setScanMode("camera");
             startCamera();
           }}
-          className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+          className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
             scanMode === "camera"
-              ? "bg-white/10 text-white border border-white/5"
-              : "text-zinc-400 hover:text-white"
+              ? "text-black font-black"
+              : "text-[var(--text-muted)] hover:text-white"
           }`}
+          style={scanMode === "camera" ? { backgroundColor: "var(--accent)" } : {}}
         >
-          Sử dụng Camera
+          Dùng Camera
         </button>
       </div>
 
       {/* Main Scanner Window */}
-      <div className="w-full max-w-md aspect-video sm:aspect-square relative flex items-center justify-center rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-2xl">
+      <div className="w-full max-w-md aspect-square relative flex items-center justify-center rounded-2xl overflow-hidden border bg-black/40 shadow-2xl" style={{ borderColor: "var(--border)" }}>
         {scanMode === "file" ? (
           <div
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className="w-full h-full flex flex-col items-center justify-center p-6 border-2 border-dashed border-zinc-700 hover:border-zinc-500 rounded-2xl cursor-pointer transition-all hover:bg-white/5"
+            className="w-full h-full flex flex-col items-center justify-center p-6 border-2 border-dashed border-zinc-800 hover:border-[var(--accent)]/50 rounded-2xl cursor-pointer transition-all hover:bg-white/[0.02]"
           >
             <input
               type="file"
@@ -217,11 +219,11 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
               accept="image/*"
               className="hidden"
             />
-            <span className="text-4xl mb-4">📤</span>
-            <p className="text-sm font-semibold mb-1 text-center">
+            <span className="text-4xl mb-3.5 filter drop-shadow-[0_0_8px_rgba(255,255,255,0.1)]">📤</span>
+            <p className="text-xs font-bold mb-1 text-[var(--text)]">
               Kéo thả hình ảnh QR vào đây
             </p>
-            <p className="text-xs text-zinc-500 text-center">
+            <p className="text-[10px] text-[var(--text-dim)] text-center">
               Hoặc click để chọn file từ thiết bị
             </p>
           </div>
@@ -238,28 +240,36 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
                   muted
                   playsInline
                 />
-                {/* Laser scan line overlay */}
-                <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-cyan-500/20 via-cyan-400 to-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.7)] animate-[scan_2s_ease-in-out_infinite]" />
+                {/* Laser scan line overlay using theme color */}
+                <div 
+                  className="absolute inset-x-0 h-0.5 animate-[scan_2s_ease-in-out_infinite]"
+                  style={{ 
+                    backgroundImage: "linear-gradient(to right, transparent, var(--accent), transparent)",
+                    boxShadow: "0 0 10px var(--accent)",
+                    top: "5%"
+                  }}
+                />
                 
                 {/* Scanner Target Box Overlay */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-3/5 aspect-square border-2 border-cyan-400/50 rounded-xl relative">
+                  <div className="w-3/5 aspect-square border-2 rounded-xl relative" style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}>
                     {/* Corner accents */}
-                    <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-cyan-400" />
-                    <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-cyan-400" />
-                    <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-cyan-400" />
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-cyan-400" />
+                    <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4" style={{ borderColor: "var(--accent)" }} />
+                    <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4" style={{ borderColor: "var(--accent)" }} />
+                    <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4" style={{ borderColor: "var(--accent)" }} />
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4" style={{ borderColor: "var(--accent)" }} />
                   </div>
                 </div>
               </>
             ) : (
-              <div className="flex flex-col items-center p-6 text-center">
+              <div className="flex flex-col items-center p-6 text-center animate-fade-up">
                 <span className="text-4xl mb-4">🎥</span>
                 <button
                   onClick={startCamera}
-                  className="py-2.5 px-5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-cyan-500/20 transition-all"
+                  className="py-2.5 px-5 rounded-xl text-xs font-bold transition-all text-black hover:opacity-90 active:scale-[0.98]"
+                  style={{ backgroundColor: "var(--accent)", boxShadow: "var(--glow-shadow)" }}
                 >
-                  Bật Camera
+                  Mở Máy Ảnh
                 </button>
               </div>
             )}
@@ -269,40 +279,40 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
 
       {/* Status or Result panel */}
       {errorMsg && (
-        <div className="w-full max-w-md p-4 rounded-xl border border-red-500/10 bg-red-950/20 text-red-400 text-xs leading-5">
+        <div className="w-full max-w-md p-4 rounded-xl border text-xs leading-relaxed" style={{ background: "rgba(239, 68, 68, 0.05)", borderColor: "rgba(239, 68, 68, 0.2)", color: "var(--danger)" }}>
           ⚠️ {errorMsg}
         </div>
       )}
 
       {scanResult && (
-        <div className="w-full max-w-md p-5 rounded-2xl border border-emerald-500/10 bg-emerald-950/10 text-left flex flex-col gap-3 animate-fade-up">
+        <div className="w-full max-w-md p-5 rounded-2xl border text-left flex flex-col gap-3 animate-fade-up" style={{ background: "rgba(16, 185, 129, 0.05)", borderColor: "rgba(16, 185, 129, 0.2)" }}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400">
               Quét Thành Công
             </span>
             <button
               onClick={resetScanner}
-              className="text-[10px] font-bold text-zinc-400 hover:text-white"
+              className="text-[10px] font-bold text-[var(--text-muted)] hover:text-white"
             >
               Quét lại
             </button>
           </div>
-          <div className="p-3 bg-zinc-900/50 border border-white/5 rounded-xl text-xs break-all max-h-36 overflow-y-auto whitespace-pre-wrap select-all font-mono">
+          <div className="p-3.5 bg-black/30 border rounded-xl text-xs break-all max-h-36 overflow-y-auto whitespace-pre-wrap select-all font-mono" style={{ borderColor: "var(--border)", color: "var(--text)" }}>
             {scanResult}
           </div>
           <div className="flex gap-2">
             <button
               onClick={copyToClipboard}
-              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition-all shadow-md shadow-emerald-500/10"
+              className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10 active:scale-[0.98]"
             >
-              Sao chép
+              Sao chép nội dung
             </button>
             {scanResult.startsWith("http://") || scanResult.startsWith("https://") ? (
               <a
                 href={scanResult}
                 target="_blank"
                 rel="noreferrer"
-                className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-semibold text-center transition-all"
+                className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold text-center transition-all active:scale-[0.98]"
               >
                 Mở liên kết
               </a>
@@ -311,14 +321,14 @@ export default function QRScanner({ onScanResult }: QRScannerProps) {
         </div>
       )}
 
-      {/* Style for Scanner Laser animation */}
-      <style jsx global>{`
+      {/* Globally compatible keyframe injection */}
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes scan {
           0% { top: 5%; }
           50% { top: 95%; }
           100% { top: 5%; }
         }
-      `}</style>
+      `}} />
     </div>
   );
 }
