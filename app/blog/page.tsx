@@ -56,8 +56,10 @@ export default function BlogPage() {
                 className="animate-fade-up block rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group"
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", animationDelay: `${i * 100}ms` }}>
                 {post.cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={post.cover} alt="" className="w-full h-44 object-cover group-hover:scale-[1.02] transition-transform duration-500" />
+                  <div className="safe-image-frame blog-list-image-frame">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={post.cover} alt="" className="safe-image group-hover:scale-[1.02] transition-transform duration-500" />
+                  </div>
                 ) : (
                   <div className="w-full h-28 flex items-center justify-center text-3xl" style={{ background: "var(--accent-dim)" }}>📝</div>
                 )}

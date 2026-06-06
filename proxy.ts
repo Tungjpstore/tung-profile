@@ -11,7 +11,8 @@ export async function proxy(request: NextRequest) {
     pathname === "/admin/login" ||
     pathname.startsWith("/api/auth/") ||
     (pathname === "/api/contact" && request.method === "POST") ||
-    (pathname === "/api/analytics" && request.method === "POST")
+    (pathname === "/api/analytics" && request.method === "POST") ||
+    (pathname === "/api/posts/interactions" && (request.method === "GET" || request.method === "POST"))
   ) {
     return NextResponse.next();
   }

@@ -14,7 +14,9 @@ function useTypingEffect(words: string[], typingSpeed = 80, deletingSpeed = 50, 
     if (!isDeleting && text === currentWord) {
       timeout = setTimeout(() => setIsDeleting(true), pauseTime);
     } else if (isDeleting && text === "") {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
       setIsDeleting(false);
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
       setWordIndex((prev) => (prev + 1) % words.length);
     } else {
       timeout = setTimeout(
@@ -36,15 +38,17 @@ function useTypingEffect(words: string[], typingSpeed = 80, deletingSpeed = 50, 
 
 /* ─── Floating particles ─── */
 function FloatingParticles() {
-  const particles = Array.from({ length: 30 }, (_, i) => ({
-    id: i,
-    size: Math.random() * 4 + 1,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    duration: Math.random() * 20 + 15,
-    delay: Math.random() * 10,
-    opacity: Math.random() * 0.3 + 0.05,
-  }));
+  const [particles] = useState(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      size: Math.random() * 4 + 1,
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      duration: Math.random() * 20 + 15,
+      delay: Math.random() * 10,
+      opacity: Math.random() * 0.3 + 0.05,
+    }))
+  );
 
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">

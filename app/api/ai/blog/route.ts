@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
 type BlogAiMode = "outline" | "draft" | "rewrite" | "seo" | "social" | "translate" | "score";
 type BlogAiIntent = "research_plan" | "longform_from_plan" | "plan_article" | "draft_from_plan" | "make_outline" | "draft_from_brief" | "continue" | "rewrite_selection" | "improve_article" | "seo_pack" | "product_pitch" | "critique";
 type PatchOperation = "replaceSelection" | "replaceContent" | "appendContent" | "updateFields" | "showOnly";
@@ -72,24 +75,24 @@ interface BlogAiRouterResult {
 const PATCH_OPERATIONS: PatchOperation[] = ["replaceSelection", "replaceContent", "appendContent", "updateFields", "showOnly"];
 const DEFAULT_QWEN_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v2/apps/protocols/compatible-mode/v1";
 const DEFAULT_QWEN_MODELS = {
-  flagship: "qwen3.6-plus-2026-04-02",
-  research: "qwen3.6-plus-2026-04-02",
-  fast: "qwen3.6-flash-2026-04-16",
+  flagship: "qwen3.5-plus",
+  research: "qwen3.5-plus",
+  fast: "qwen3.5-flash",
   fallback: "qwen3.5-plus",
 };
 
 const INTENT_PROMPTS: Record<BlogAiIntent, { operation: PatchOperation; prompt: string }> = {
   research_plan: {
     operation: "showOnly",
-    prompt: "Đóng vai researcher + editor trưởng. Dựa trên ý tưởng/title/brief, dùng web search để tìm dữ liệu thật, nguồn đáng tin và insight mới. Trả đúng 3 kịch bản bài viết có thesis, outline, nguồn nên dùng, từ khóa SEO, search intent, góc kể chuyện và rủi ro fact-check. Không viết bài hoàn chỉnh.",
+    prompt: "Đóng vai researcher + editor trưởng. Dùng web search có chọn lọc để tìm 5-8 nguồn đáng tin, insight mới và rủi ro fact-check. Trả đúng 3 kịch bản bài viết có thesis, outline, nguồn nên dùng, từ khóa SEO, search intent và góc kể chuyện. Không viết bài hoàn chỉnh.",
   },
   longform_from_plan: {
     operation: "replaceContent",
-    prompt: "Viết bài blog dài hoàn chỉnh 2.000-3.000 từ bằng Markdown. Phải dựa trên selectedScenario nếu có, hoặc title/brief nếu chưa có scenario. Dùng web search khi researchEnabled=true, chèn citation markdown cạnh các dữ kiện quan trọng, có mở bài, H2/H3, ví dụ thực tế, FAQ, kết luận, CTA mềm và phần nguồn tham khảo cuối bài. Đồng thời đề xuất SEO fields.",
+    prompt: "Viết bài blog dài hoàn chỉnh bằng Markdown. Phải dựa trên selectedScenario nếu có, hoặc title/brief nếu chưa có scenario. Chèn citation markdown cạnh các dữ kiện quan trọng khi có nguồn, có mở bài, H2/H3, ví dụ thực tế, FAQ, kết luận, CTA mềm và phần nguồn tham khảo cuối bài.",
   },
   plan_article: {
     operation: "showOnly",
-    prompt: "Đề xuất đúng 3 kịch bản/hướng triển khai bài viết dựa trên title, brief, category, tags, sản phẩm đính kèm và phong cách đã chọn. Không viết bài hoàn chỉnh. Mỗi kịch bản phải khác nhau thật sự về góc nhìn, lời hứa với người đọc và outline.",
+    prompt: "Đề xuất nhanh đúng 3 kịch bản/hướng triển khai bài viết dựa trên title, brief, category, tags, sản phẩm đính kèm và phong cách đã chọn. Không dùng web search, không viết bài hoàn chỉnh. Mỗi kịch bản phải khác nhau thật sự về góc nhìn, lời hứa với người đọc và outline.",
   },
   draft_from_plan: {
     operation: "replaceContent",
@@ -220,6 +223,53 @@ function extractText(payload: unknown): string {
     .trim();
 }
 
+function wordCount(content: string) {
+  return content.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function stripMarkdown(content: string) {
+  return content
+    .replace(/!\[[^\]]*]\([^)]+\)/g, "")
+    .replace(/\[[^\]]+]\([^)]+\)/g, (match) => match.replace(/^\[|\]\([^)]+\)$/g, ""))
+    .replace(/[#*_`>\-|[\]().]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function slugify(input: string) {
+  return input
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90);
+}
+
+function makeExcerpt(content: string) {
+  return stripMarkdown(content).slice(0, 156).replace(/\s+\S*$/, "").trim();
+}
+
+function buildSeoFields(body: BlogAiRequest, content: string): BlogAiPatch["fields"] {
+  const title = body.post?.title?.trim() || content.match(/^#\s+(.+)$/m)?.[1]?.trim() || "Bài viết mới";
+  const excerpt = body.post?.excerpt?.trim() || makeExcerpt(content);
+  const tags = body.post?.tags?.length ? body.post.tags : [];
+  return {
+    title,
+    slug: body.post?.slug?.trim() || slugify(title),
+    excerpt,
+    metaTitle: body.post?.metaTitle?.trim() || title.slice(0, 65),
+    metaDescription: body.post?.metaDescription?.trim() || excerpt.slice(0, 156),
+    category: body.post?.category?.trim() || "Chia sẻ",
+    tags,
+  };
+}
+
+function isMarkdownWriterIntent(intent: BlogAiIntent) {
+  return intent === "longform_from_plan" || intent === "draft_from_plan" || intent === "draft_from_brief";
+}
+
 function resolveIntent(body: BlogAiRequest): BlogAiIntent {
   if (body.intent) return body.intent;
   const mode = body.mode || "continue";
@@ -241,6 +291,20 @@ function resolveQwenModel(intent: BlogAiIntent, useResearch: boolean) {
     return process.env.QWEN_FAST_MODEL || DEFAULT_QWEN_MODELS.fast;
   }
   return process.env.QWEN_FALLBACK_MODEL || DEFAULT_QWEN_MODELS.fallback;
+}
+
+function resolveMaxOutputTokens(intent: BlogAiIntent, targetWords: number) {
+  if (intent === "longform_from_plan") return Math.max(5500, Math.min(12000, Math.ceil(targetWords * 2.6)));
+  if (intent === "draft_from_plan" || intent === "draft_from_brief") return Math.max(3000, Math.min(6500, Math.ceil(targetWords * 1.9)));
+  if (intent === "research_plan" || intent === "plan_article") return 2200;
+  if (intent === "seo_pack" || intent === "rewrite_selection") return 1200;
+  return 1800;
+}
+
+function shouldUseResearch(body: BlogAiRequest, intent: BlogAiIntent) {
+  if (body.researchEnabled === false) return false;
+  if (intent === "research_plan") return true;
+  return intent === "longform_from_plan" && Boolean(body.scenario || body.instruction || body.post?.title);
 }
 
 function parseRouterResult(text: string, fallbackOperation: PatchOperation, allowedOperations: PatchOperation[]): BlogAiRouterResult {
@@ -280,6 +344,51 @@ function parseRouterResult(text: string, fallbackOperation: PatchOperation, allo
   };
 }
 
+function buildMarkdownWriterInput(body: BlogAiRequest, intent: BlogAiIntent) {
+  const targetWords = Math.max(800, Math.min(3500, Number(body.targetWords) || 2200));
+  const minWords = intent === "longform_from_plan" ? Math.round(targetWords * 0.82) : Math.min(1200, Math.round(targetWords * 0.55));
+  const maxWords = intent === "longform_from_plan" ? Math.round(targetWords * 1.18) : Math.min(1600, Math.round(targetWords * 0.8));
+  return [
+    {
+      role: "system",
+      content: [
+        "Bạn là ghostwriter blog cao cấp chạy trực tiếp trong trình soạn thảo.",
+        "Trả về Markdown thuần, không JSON, không lời giải thích ngoài bài viết.",
+        "Nhiệm vụ là tự viết bài, không được trả outline rỗng, không yêu cầu blogger tự viết tiếp nếu đã có title hoặc brief.",
+        "Bám tuyệt đối vào currentPost, userInstruction, selectedScenario, attachedProducts và editorMemory.",
+        "Nếu thiếu dữ kiện cá nhân, dùng placeholder rõ ràng dạng [điền ví dụ cá nhân] nhưng vẫn hoàn thành bài.",
+        "Giọng văn tiếng Việt tự nhiên, rõ, có mạch kể, hạn chế sáo rỗng. Không biến bài thành landing page.",
+        "Khi có nguồn web/citation, đặt citation Markdown ngay sau claim quan trọng và thêm mục 'Nguồn tham khảo' cuối bài.",
+        "Sản phẩm đính kèm chỉ được nhắc như gợi ý/review mềm; không bịa giá, ưu đãi, link, thông số hay cam kết.",
+        "Cấu trúc bắt buộc: H1, mở bài có hook, các H2/H3 rõ, ví dụ thực tế, checklist hoặc khung áp dụng, FAQ ngắn, kết luận có CTA mềm.",
+      ].join(" "),
+    },
+    {
+      role: "user",
+      content: [
+        `intent: ${intent}`,
+        `target length: viết trong khoảng ${minWords}-${maxWords} từ, ưu tiên đủ ý hơn đúng tuyệt đối số từ.`,
+        body.instruction ? `brief / ý tưởng: ${body.instruction}` : "brief / ý tưởng: ",
+        body.audience ? `độc giả mục tiêu: ${body.audience}` : "độc giả mục tiêu: người đọc blog phổ thông",
+        body.tone ? `giọng văn: ${body.tone}` : "giọng văn: tự nhiên, có góc nhìn cá nhân",
+        body.diction ? `ngôn từ: ${body.diction}` : "ngôn từ: dễ hiểu",
+        body.memory ? `ghi nhớ phong cách: ${body.memory}` : "ghi nhớ phong cách: ",
+        body.scenario ? `kịch bản đã chọn: ${JSON.stringify(body.scenario)}` : "kịch bản đã chọn: chưa có, hãy tự dựng từ title/brief",
+        "currentPost:",
+        JSON.stringify({
+          title: body.post?.title || "",
+          excerpt: body.post?.excerpt || "",
+          category: body.post?.category || "",
+          tags: body.post?.tags || [],
+          productAngle: body.post?.productAngle || "",
+          attachedProducts: body.post?.products || [],
+          existingContent: body.post?.content || "",
+        }),
+      ].join("\n\n"),
+    },
+  ];
+}
+
 function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
   const intentConfig = INTENT_PROMPTS[intent];
   return [
@@ -292,8 +401,8 @@ function buildInput(body: BlogAiRequest, intent: BlogAiIntent) {
         "Fidelity rule: không đổi chủ đề, title, thesis, facts, persona, timeline, dự án, tên riêng hoặc scope trừ khi userInstruction yêu cầu rõ.",
         "Rewrite rule: khi intent là rewrite_selection, chỉ sửa selectedText; giữ cùng ý, cùng thông tin, cùng phạm vi, chỉ làm câu chữ rõ/sắc/mạch lạc hơn.",
         "Whole-article rule: khi intent là improve_article, được chỉnh toàn bài nhưng phải giữ luận điểm, bố cục chính và dữ kiện; không biến bài thành một bài khác.",
-        "Research rule: khi intent là research_plan hoặc longform_from_plan và có web_search, phải ưu tiên nguồn hiện hành/đáng tin, phân biệt dữ kiện đã kiểm chứng với nhận định, và thêm citation markdown ngay sau claim quan trọng.",
-        "Longform rule: khi intent là longform_from_plan, viết như một bài hoàn chỉnh khoảng targetWords từ; không trả outline rỗng, không bắt blogger tự viết tiếp. Nếu thiếu dữ kiện cá nhân thì dùng placeholder rõ ràng hoặc hỏi lại bằng showOnly.",
+        "Speed rule: khi intent là plan_article, không tra web, không suy luận dài; trả 3 hướng rõ trong phản hồi ngắn để blogger duyệt nhanh.",
+        "Research rule: khi intent là research_plan và có web_search, phải ưu tiên nguồn hiện hành/đáng tin, phân biệt dữ kiện đã kiểm chứng với nhận định, và thêm citation markdown ngay sau claim quan trọng.",
         "Draft rule: bản nháp phải đi từ title/excerpt/tags/content hiện có; nếu brief mơ hồ nhưng vẫn có title, được chủ động xây bài với giả định minh bạch.",
         "Planning rule: khi intent là plan_article hoặc research_plan, trả đúng 3 scenarios khác nhau và patch.operation='showOnly'. Mỗi scenario cần title, angle, readerPromise, outline, tone, productFit, suggestedTags.",
         "Scenario draft rule: khi intent là draft_from_plan hoặc longform_from_plan, selectedScenario là bản thiết kế ưu tiên; không đổi sang hướng khác, không bỏ outline chính.",
@@ -405,7 +514,8 @@ export async function POST(request: Request) {
     const body = (await request.json()) as BlogAiRequest;
     const intent = resolveIntent(body);
     const intentConfig = INTENT_PROMPTS[intent];
-    const useResearch = body.researchEnabled !== false && (intent === "research_plan" || intent === "longform_from_plan");
+    const useResearch = shouldUseResearch(body, intent);
+    const targetWords = Math.max(800, Math.min(3500, Number(body.targetWords) || 2200));
 
     const model = resolveQwenModel(intent, useResearch);
     const baseUrl = (process.env.QWEN_BASE_URL || DEFAULT_QWEN_BASE_URL).replace(/\/+$/, "");
@@ -417,11 +527,12 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model,
-        input: buildInput(body, intent),
+        input: isMarkdownWriterIntent(intent) ? buildMarkdownWriterInput(body, intent) : buildInput(body, intent),
         tools: useResearch ? [{ type: "web_search" }, { type: "web_extractor" }] : undefined,
         tool_choice: useResearch ? "auto" : undefined,
-        enable_thinking: useResearch ? true : undefined,
-        temperature: intent === "seo_pack" ? 0.35 : 0.65,
+        enable_thinking: false,
+        temperature: intent === "seo_pack" ? 0.35 : intent === "plan_article" ? 0.55 : 0.65,
+        max_output_tokens: resolveMaxOutputTokens(intent, targetWords),
       }),
     });
 
@@ -434,8 +545,20 @@ export async function POST(request: Request) {
     }
 
     const text = extractText(payload);
-    const routed = parseRouterResult(text, intentConfig.operation, ALLOWED_OPERATIONS[intent]);
     const citations = extractCitations(payload);
+    const routed = isMarkdownWriterIntent(intent)
+      ? {
+          assistantNote: intent === "longform_from_plan" ? "AI đã viết bài dài và đưa vào trình soạn thảo." : "AI đã viết bản nháp và đưa vào trình soạn thảo.",
+          patch: {
+            operation: "replaceContent" as const,
+            content: text.trim(),
+            fields: buildSeoFields(body, text),
+          },
+          warnings: wordCount(text) < targetWords * 0.55 ? ["Bài viết ngắn hơn mục tiêu. Hãy bấm 'Viết tiếp' hoặc tăng độ dài rồi chạy lại."] : [],
+          scenarios: [],
+          researchBrief: citations.length ? `Nguồn đã dùng: ${citations.slice(0, 8).join(", ")}` : "",
+        }
+      : parseRouterResult(text, intentConfig.operation, ALLOWED_OPERATIONS[intent]);
     return NextResponse.json({
       result: routed.patch.content || routed.assistantNote,
       ...routed,

@@ -305,6 +305,18 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     if (typeof window !== "undefined") window.localStorage.setItem(AI_MEMORY_STORAGE, value);
   };
 
+  const buildPostPatchFromAi = (content: string, fields?: AiPatch["fields"]) => {
+    const patch: Partial<BlogPost> = { content };
+    if (typeof fields?.title === "string") patch.title = fields.title.trim();
+    if (typeof fields?.slug === "string") patch.slug = slugify(fields.slug);
+    if (typeof fields?.excerpt === "string") patch.excerpt = fields.excerpt.trim();
+    if (typeof fields?.metaTitle === "string") patch.metaTitle = fields.metaTitle.trim();
+    if (typeof fields?.metaDescription === "string") patch.metaDescription = fields.metaDescription.trim();
+    if (typeof fields?.category === "string") patch.category = fields.category.trim();
+    if (Array.isArray(fields?.tags)) patch.tags = fields.tags.map((tag) => String(tag).trim()).filter(Boolean);
+    return patch;
+  };
+
   const saveStoredApiKey = () => {
     const key = apiKeyDraft.trim();
     if (!key.startsWith("sk-")) {
@@ -581,7 +593,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
           memory: aiMemory,
           tone: aiTone,
           diction: aiDiction,
-          researchEnabled: aiResearchEnabled,
+          researchEnabled: intent === "plan_article" ? false : aiResearchEnabled,
           targetWords: aiTargetWords,
           audience: aiAudience,
           scenario: intent === "draft_from_plan" || intent === "longform_from_plan" ? selectedScenario : undefined,
@@ -607,6 +619,10 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
         setAiScenarios(json.scenarios);
         setSelectedScenarioId(json.scenarios[0].id);
         setAiResult(json.researchBrief || "Đã tạo 3 hướng bài. Chọn một hướng bên trên rồi bấm Viết bản nháp.");
+      }
+      if ((intent === "longform_from_plan" || intent === "draft_from_plan" || intent === "draft_from_brief") && patch?.operation === "replaceContent" && patch.content?.trim()) {
+        updatePost(buildPostPatchFromAi(patch.content, patch.fields));
+        showToast(intent === "longform_from_plan" ? "AI đã viết bài và đưa vào trình soạn thảo" : "AI đã viết nháp và đưa vào trình soạn thảo");
       }
       if (json.intent) setAiIntent(json.intent);
     } catch {
@@ -646,16 +662,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
     }
 
     if (aiPatch.operation === "replaceContent") {
-      const patch: Partial<BlogPost> = { content };
-      const fields = aiPatch.fields;
-      if (typeof fields?.title === "string") patch.title = fields.title.trim();
-      if (typeof fields?.slug === "string") patch.slug = slugify(fields.slug);
-      if (typeof fields?.excerpt === "string") patch.excerpt = fields.excerpt.trim();
-      if (typeof fields?.metaTitle === "string") patch.metaTitle = fields.metaTitle.trim();
-      if (typeof fields?.metaDescription === "string") patch.metaDescription = fields.metaDescription.trim();
-      if (typeof fields?.category === "string") patch.category = fields.category.trim();
-      if (Array.isArray(fields?.tags)) patch.tags = fields.tags.map((tag) => String(tag).trim()).filter(Boolean);
-      updatePost(patch);
+      updatePost(buildPostPatchFromAi(content, aiPatch.fields));
       showToast("Đã cập nhật toàn bộ nội dung bài viết");
       return;
     }
@@ -1030,8 +1037,8 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                     <h3 className="text-sm font-bold text-white">AI viết cùng bài</h3>
                     <p className="mt-1 text-[11px] leading-4 text-zinc-500">Chọn đoạn trong Markdown nếu muốn sửa đúng một đoạn.</p>
                   </div>
-                  <span className={`rounded-lg px-2 py-1 text-[10px] font-bold ${storedApiKey ? "bg-emerald-500/10 text-emerald-300" : "bg-zinc-500/10 text-zinc-500"}`}>
-                    {storedApiKey ? "Qwen ready" : "Chưa có key"}
+                  <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-300">
+                    {storedApiKey ? "Qwen local" : "Qwen server"}
                   </span>
                 </div>
               </div>
@@ -1075,11 +1082,19 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
 
                   <button
                     type="button"
-                    onClick={() => runAi("research_plan")}
+                    onClick={() => runAi("plan_article")}
                     disabled={aiLoading}
                     className="mt-3 w-full rounded-xl bg-indigo-500 px-3 py-3 text-left text-sm font-bold text-white transition-all hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {aiLoading && aiIntent === "research_plan" ? "Đang nghiên cứu và dựng hướng..." : "Tạo 3 hướng bài để duyệt"}
+                    {aiLoading && aiIntent === "plan_article" ? "Đang dựng 3 hướng..." : "Dựng 3 hướng nhanh"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runAi("research_plan")}
+                    disabled={aiLoading}
+                    className="mt-2 w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-left text-xs font-bold text-zinc-200 transition-all hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {aiLoading && aiIntent === "research_plan" ? "Đang tra nguồn..." : "Tra nguồn và dựng hướng sâu"}
                   </button>
                 </div>
 
@@ -1118,7 +1133,7 @@ export default function BlogStudio({ posts, setPosts, editPost, setEditPost, sho
                       disabled={aiLoading}
                       className="rounded-xl bg-emerald-500 px-3 py-3 text-left text-sm font-bold text-white transition-all hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {aiLoading && aiIntent === "longform_from_plan" ? `Đang viết ${aiTargetWords.toLocaleString("vi-VN")} từ...` : `Viết bài hoàn chỉnh ${aiTargetWords.toLocaleString("vi-VN")} từ`}
+                      {aiLoading && aiIntent === "longform_from_plan" ? `Đang viết ${aiTargetWords.toLocaleString("vi-VN")} từ...` : `Viết thẳng vào bài ${aiTargetWords.toLocaleString("vi-VN")} từ`}
                     </button>
                     <button
                       type="button"

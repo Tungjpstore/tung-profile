@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import PostEngagement from "./components/PostEngagement";
 import { SITE_URL } from "./lib/site";
 
 interface Project {
@@ -51,6 +52,8 @@ interface Post {
   tags: string[];
   status: string;
   createdAt: string;
+  excerpt?: string;
+  category?: string;
 }
 
 type TabType = "feed" | "info" | "projects" | "services" | "payment";
@@ -193,6 +196,7 @@ export default function Home() {
         <div className="network-container topbar-inner">
           <Link href="/" className="brand-mark" aria-label={data.name}>TN</Link>
           <div className="topbar-actions">
+            <Link href="/qr" className="topbar-link">Tạo QR</Link>
             <Link href="/blog" className="topbar-link">Blog</Link>
             <button className="icon-button" onClick={toggleTheme} aria-label={isDark ? "Bật giao diện sáng" : "Bật giao diện tối"}><Icon name={isDark ? "sun" : "moon"} /></button>
           </div>
@@ -202,7 +206,7 @@ export default function Home() {
       <div className="network-container">
         <section className="network-profile">
           <div className="network-cover">
-            {data.cover ? <Image src={`${data.cover}?v=${Date.now()}`} alt="" fill sizes="1120px" className="cover-image" unoptimized /> : null}
+            {data.cover ? <Image src={data.cover} alt="" fill sizes="1120px" className="cover-image" unoptimized /> : null}
             <div className="cover-glass">
               <span>profile://tung-nguyen</span>
               <span>{profile.hometown}</span>
@@ -212,7 +216,7 @@ export default function Home() {
           <div className="network-profile-body">
             <div className="network-avatar">
               {data.avatar ? (
-                <Image src={`${data.avatar}?v=${Date.now()}`} alt={data.name} width={140} height={140} unoptimized />
+                <Image src={data.avatar} alt={data.name} width={140} height={140} unoptimized />
               ) : (
                 <span>TN</span>
               )}
@@ -279,16 +283,19 @@ export default function Home() {
                         <p>{new Date(post.createdAt).toLocaleDateString("vi-VN")}</p>
                       </div>
                     </div>
-                    {post.cover ? <Image src={post.cover} alt="" width={900} height={420} className="feed-cover" /> : null}
+                    {post.cover ? (
+                      <div className="safe-image-frame feed-cover-frame">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={post.cover} alt="" className="safe-image" loading="lazy" />
+                      </div>
+                    ) : null}
                     <h2>{post.title}</h2>
-                    <p>{excerpt(post.content)}</p>
+                    <p>{post.excerpt || excerpt(post.content)}</p>
                     <div className="tag-strip">{post.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
-                    <div className="share-row">
+                    <div className="share-row read-row">
                       <Link href={`/blog/${post.slug}`}>Đọc bài</Link>
-                      {shareLinks(postUrl, post.title).map((item) => (
-                        <a key={item.label} href={item.href} target="_blank" rel="noreferrer">{item.label}</a>
-                      ))}
                     </div>
+                    <PostEngagement slug={post.slug} title={post.title} url={postUrl} compact />
                   </article>
                 );
               })}

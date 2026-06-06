@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import MarkdownRenderer from "../../components/MarkdownRenderer";
+import PostEngagement from "../../components/PostEngagement";
 import { SITE_URL } from "../../lib/site";
 import { getPublicPost, stripMarkdown } from "../../lib/posts-store";
 
@@ -66,11 +67,6 @@ export default async function PostPage({ params }: Props) {
 
   const readTime = post.readingMinutes || Math.max(1, Math.ceil(post.content.split(/\s+/).length / 220));
   const shareUrl = `${SITE_URL}/blog/${post.slug}`;
-  const shareLinks = [
-    ["X", `https://twitter.com/intent/tweet?text=${encodeURIComponent(post.title)}&url=${encodeURIComponent(shareUrl)}`],
-    ["Facebook", `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`],
-    ["Telegram", `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(post.title)}`],
-  ];
 
   return (
     <main className="min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
@@ -85,8 +81,10 @@ export default async function PostPage({ params }: Props) {
 
       <article className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16 animate-fade-up">
         {post.cover && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={post.cover} alt="" className="w-full h-48 sm:h-72 object-cover rounded-2xl mb-8" />
+          <div className="safe-image-frame blog-cover-frame">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={post.cover} alt="" className="safe-image" />
+          </div>
         )}
 
         <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--accent)" }}>{post.category || "Chia sẻ"}</p>
@@ -111,8 +109,10 @@ export default async function PostPage({ params }: Props) {
               {(post.products || []).map((product, index) => (
                 <a key={product.id || index} href={product.href || "#"} target={product.href ? "_blank" : undefined} rel="noreferrer" className="block overflow-hidden rounded-xl transition-all hover:-translate-y-0.5" style={{ background: "color-mix(in srgb, var(--bg-card) 88%, var(--accent-dim))", border: "1px solid var(--border)" }}>
                   {product.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={product.image} alt="" className="h-40 w-full object-cover" />
+                    <div className="safe-image-frame product-image-frame">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={product.image} alt="" className="safe-image" />
+                    </div>
                   ) : null}
                   <div className="p-4">
                     <h2 className="text-base font-bold">{product.name || "Sản phẩm"}</h2>
@@ -128,13 +128,7 @@ export default async function PostPage({ params }: Props) {
           </section>
         ) : null}
 
-        <div className="mt-10 flex flex-wrap gap-2">
-          {shareLinks.map(([label, href]) => (
-            <a key={label} href={href} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center rounded-lg px-3 text-xs font-bold transition-all hover:-translate-y-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}>
-              Chia sẻ {label}
-            </a>
-          ))}
-        </div>
+        <PostEngagement slug={post.slug} title={post.title} url={shareUrl} commentsOpen />
 
         <div className="mt-12 pt-6 text-center" style={{ borderTop: "1px solid var(--border)" }}>
           <Link href="/blog" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all hover:-translate-y-0.5" style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>

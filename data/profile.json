@@ -104,6 +104,19 @@
         "Framer Motion"
       ],
       "status": "Hoàn thành"
+    },
+    {
+      "name": "QR Code Utility",
+      "desc": "Công cụ tạo mã QR Code cao cấp (hỗ trợ màu gradient, chèn logo) và quét giải mã mã QR trực tuyến bằng webcam hoặc hình ảnh.",
+      "tech": [
+        "React",
+        "Next.js",
+        "TypeScript",
+        "HTML5 Canvas",
+        "jsQR"
+      ],
+      "status": "Hoàn thành",
+      "href": "/qr"
     }
   ],
   "services": [
