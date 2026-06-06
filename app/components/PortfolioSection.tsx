@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 function useInView(threshold = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
@@ -125,10 +126,12 @@ export default function PortfolioSection() {
             >
               {/* Image */}
               <div className="relative h-52 overflow-hidden">
-                <img
+                <Image
                   src={project.image}
                   alt={project.title}
+                  fill
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  unoptimized
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent" />
 

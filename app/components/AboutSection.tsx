@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 function useInView(threshold = 0.2) {
   const ref = useRef<HTMLDivElement>(null);
@@ -65,10 +66,13 @@ export default function AboutSection() {
               <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 blur-xl" />
               <div className="absolute -inset-px rounded-3xl bg-gradient-to-br from-blue-500/20 to-purple-500/20" />
               <div className="relative rounded-3xl overflow-hidden bg-zinc-900 border border-white/5">
-                <img
+                <Image
                   src="https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=600&h=700&fit=crop"
                   alt="Working"
+                  width={600}
+                  height={700}
                   className="w-full h-[450px] object-cover opacity-80 hover:opacity-100 transition-opacity duration-500"
+                  unoptimized
                 />
                 {/* Overlay gradient */}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent" />

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
@@ -109,13 +110,16 @@ export default function TestimonialsSection() {
               <div className="flex items-center gap-4 mt-8">
                 <div className="relative">
                   {testimonials.map((t, i) => (
-                    <img
+                    <Image
                       key={i}
                       src={t.avatar}
                       alt={t.name}
+                      width={56}
+                      height={56}
                       className={`w-14 h-14 rounded-full border-2 border-white/10 object-cover transition-all duration-500 ${
                         i === active ? "opacity-100 scale-100" : "opacity-0 scale-75 absolute inset-0"
                       }`}
+                      unoptimized
                     />
                   ))}
                 </div>

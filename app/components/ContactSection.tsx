@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
@@ -117,11 +118,13 @@ export default function ContactSection() {
                 </svg>
                 Quick Payment
               </p>
-              <div className="inline-block p-2 bg-white rounded-2xl shadow-2xl">
-                <img
+              <div className="inline-block p-2 bg-white rounded-2xl shadow-2xl relative w-40 h-40">
+                <Image
                   src="https://img.vietqr.io/image/970422-123456789-compact.png"
                   alt="VietQR Payment"
-                  className="w-40 rounded-xl"
+                  fill
+                  className="rounded-xl object-contain p-1"
+                  unoptimized
                 />
               </div>
               <p className="text-xs text-zinc-600 mt-3">Scan to pay via VietQR</p>

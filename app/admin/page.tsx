@@ -150,6 +150,44 @@ export default function AdminPage() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [editPost, setEditPost] = useState<BlogPost | null>(null);
 
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      showToast("Vui lòng điền đầy đủ mật khẩu cũ và mới", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast("Mật khẩu mới và xác nhận mật khẩu không khớp", "error");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const res = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) {
+        showToast(json.warning || "Đổi mật khẩu thành công!");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        showToast(json.error || "Đổi mật khẩu thất bại!", "error");
+      }
+    } catch {
+      showToast("Lỗi kết nối API!", "error");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   // Load data
   useEffect(() => {
     fetch("/api/profile").then(r => r.json()).then(d => { setData(d); setLoading(false); });
@@ -304,6 +342,52 @@ export default function AdminPage() {
                     <div><label className={labelCls}>Mối quan hệ</label><input className={inputCls} value={data.relationship || ""} onChange={e => set("relationship", e.target.value)} placeholder="Đang cập nhật" /></div>
                   </div>
                   <div><label className={labelCls}>Sở thích (phẩy cách)</label><input className={inputCls} value={(data.hobbies || []).join(", ")} onChange={e => set("hobbies", e.target.value.split(",").map(s => s.trim()).filter(Boolean))} placeholder="Công nghệ, AI, Thiết kế" /></div>
+                </div>
+              </Card>
+              <Card title="Đổi mật khẩu bảo mật">
+                <div className="space-y-4">
+                  <div>
+                    <label className={labelCls}>Mật khẩu hiện tại</label>
+                    <input
+                      type="password"
+                      className={inputCls}
+                      value={currentPassword}
+                      onChange={e => setCurrentPassword(e.target.value)}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Mật khẩu mới</label>
+                      <input
+                        type="password"
+                        className={inputCls}
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="••••••••"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Xác nhận mật khẩu mới</label>
+                      <input
+                        type="password"
+                        className={inputCls}
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                      />
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={changingPassword}
+                      className={btnPrimary + " flex items-center gap-2 ml-auto"}
+                    >
+                      {changingPassword ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "🔑"}
+                      {changingPassword ? "Đang đổi..." : "Đổi mật khẩu"}
+                    </button>
+                  </div>
                 </div>
               </Card>
             </>

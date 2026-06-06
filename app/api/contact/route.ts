@@ -1,18 +1,14 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import { verifyTurnstileToken } from "@/app/lib/turnstile";
+import {
+  readMessages,
+  saveMessage,
+  updateMessageStatus,
+  deleteMessage,
+} from "@/app/lib/contact-store";
 
-const MSG_PATH = path.join(process.cwd(), "data", "messages.json");
-
-function readMessages() {
-  if (!fs.existsSync(MSG_PATH)) return [];
-  return JSON.parse(fs.readFileSync(MSG_PATH, "utf-8"));
-}
-
-function writeMessages(data: unknown[]) {
-  fs.writeFileSync(MSG_PATH, JSON.stringify(data, null, 2), "utf-8");
-}
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // POST — visitor sends a message (public)
 export async function POST(request: Request) {
@@ -32,18 +28,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Vui lòng giải captcha" }, { status: 400 });
     }
 
-    const messages = readMessages();
-    const newMsg = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    await saveMessage({
       name,
       email,
       phone: phone || "",
       message,
-      read: false,
-      createdAt: new Date().toISOString(),
-    };
-    messages.unshift(newMsg);
-    writeMessages(messages);
+    });
 
     return NextResponse.json({ success: true });
   } catch {
@@ -54,7 +44,7 @@ export async function POST(request: Request) {
 // GET — admin reads messages (protected by middleware)
 export async function GET() {
   try {
-    const messages = readMessages();
+    const messages = await readMessages();
     return NextResponse.json(messages);
   } catch {
     return NextResponse.json([], { status: 500 });
@@ -65,11 +55,9 @@ export async function GET() {
 export async function PUT(request: Request) {
   try {
     const { id, read } = await request.json();
-    const messages = readMessages();
-    const idx = messages.findIndex((m: { id: string }) => m.id === id);
-    if (idx >= 0) {
-      messages[idx].read = read;
-      writeMessages(messages);
+    const success = await updateMessageStatus(id, read);
+    if (!success) {
+      return NextResponse.json({ error: "Không tìm thấy tin nhắn" }, { status: 404 });
     }
     return NextResponse.json({ success: true });
   } catch {
@@ -81,9 +69,10 @@ export async function PUT(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const { id } = await request.json();
-    const messages = readMessages();
-    const filtered = messages.filter((m: { id: string }) => m.id !== id);
-    writeMessages(filtered);
+    const success = await deleteMessage(id);
+    if (!success) {
+      return NextResponse.json({ error: "Không tìm thấy tin nhắn" }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Lỗi" }, { status: 500 });

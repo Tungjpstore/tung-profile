@@ -1,9 +1,13 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { readProfile } from "./lib/profile-store";
+import { listPosts } from "./lib/posts-store";
 import PostEngagement from "./components/PostEngagement";
+import ThemeToggle from "./components/ThemeToggle";
+import CopyButton from "./components/CopyButton";
+import AnalyticsTracker from "./components/AnalyticsTracker";
+import TrackableLink from "./components/TrackableLink";
+import MessengerButton from "./components/MessengerButton";
 import { SITE_URL } from "./lib/site";
 
 interface Project {
@@ -57,7 +61,23 @@ interface Post {
 }
 
 type TabType = "feed" | "info" | "projects" | "services" | "tools" | "payment";
-type IconName = "bank" | "briefcase" | "calendar" | "check" | "code" | "copy" | "external" | "heart" | "home" | "mail" | "moon" | "qr" | "share" | "sun" | "user" | "wallet";
+type IconName =
+  | "bank"
+  | "briefcase"
+  | "calendar"
+  | "check"
+  | "code"
+  | "copy"
+  | "external"
+  | "heart"
+  | "home"
+  | "mail"
+  | "moon"
+  | "qr"
+  | "share"
+  | "sun"
+  | "user"
+  | "wallet";
 
 const ICONS: Record<IconName, string> = {
   bank: "M3 10h18 M5 10V8l7-4 7 4v2 M6 10v8 M10 10v8 M14 10v8 M18 10v8 M4 18h16 M3 21h18",
@@ -86,11 +106,18 @@ const SOCIAL_ICONS: Record<string, string> = {
   Email: "M4 5h16v14H4z M4 7l8 6 8-6",
 };
 
-const MESSENGER_URL = "https://m.me/vnecs";
-
 function Icon({ name, className = "" }: { name: IconName; className?: string }) {
   return (
-    <svg className={className || "h-4 w-4"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className={className || "h-4 w-4"}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d={ICONS[name]} />
     </svg>
   );
@@ -98,7 +125,16 @@ function Icon({ name, className = "" }: { name: IconName; className?: string }) 
 
 function SocialIcon({ d }: { d: string }) {
   return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className="h-4 w-4"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d={d} />
     </svg>
   );
@@ -120,86 +156,60 @@ function excerpt(markdown: string) {
   return markdown.replace(/[#*_`>\-\[\]()]/g, "").replace(/\s+/g, " ").trim().slice(0, 180);
 }
 
-export default function Home() {
-  const [data, setData] = useState<ProfileData | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [activeTab, setActiveTab] = useState<TabType>("feed");
-  const [isDark, setIsDark] = useState(true);
-  const [copied, setCopied] = useState(false);
+export const dynamic = "force-dynamic";
 
-  const track = (type: string, label: string) => {
-    fetch("/api/analytics", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type, label }),
-    }).catch(() => {});
-  };
+interface HomeProps {
+  searchParams: Promise<{ tab?: string }>;
+}
 
-  useEffect(() => {
-    fetch("/api/profile", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((profile: ProfileData) => {
-        const mode = localStorage.getItem("theme-mode") || profile.theme?.mode || "dark";
-        const accent = profile.theme?.accent || "cyan";
+export default async function Home({ searchParams }: HomeProps) {
+  const params = await searchParams;
+  const activeTab = (params.tab as TabType) || "feed";
 
-        setData(profile);
-        setIsDark(mode === "dark");
-        document.documentElement.classList.toggle("light", mode !== "dark");
-        document.documentElement.setAttribute("data-accent", accent);
-        track("pageview", "");
-      });
+  const data = (await readProfile()) as ProfileData;
+  const posts = (await listPosts(false)) as Post[];
 
-    fetch("/api/posts", { cache: "no-store" }).then((r) => r.json()).then(setPosts).catch(() => setPosts([]));
-  }, []);
+  const birthYear = data.birthYear || 1999;
+  const age = new Date().getFullYear() - birthYear;
+  const hometown =
+    data.hometown ||
+    data.info.find((item) => item.label.toLowerCase().includes("địa"))?.value ||
+    "Việt Nam";
+  const relationship = data.relationship || "Đang cập nhật";
+  const hobbies = data.hobbies?.length ? data.hobbies : ["Công nghệ", "AI", "Thiết kế sản phẩm"];
 
-  const profile = useMemo(() => {
-    const birthYear = data?.birthYear || 1999;
-    const age = new Date().getFullYear() - birthYear;
-    const hometown = data?.hometown || data?.info.find((item) => item.label.toLowerCase().includes("địa"))?.value || "Việt Nam";
-    const relationship = data?.relationship || "Đang cập nhật";
-    const hobbies = data?.hobbies?.length ? data.hobbies : ["Công nghệ", "AI", "Thiết kế sản phẩm"];
-    return { birthYear, age, hometown, relationship, hobbies };
-  }, [data]);
+  const paymentQr =
+    data.payment.qrImage ||
+    `https://img.vietqr.io/image/${encodeURIComponent(data.payment.bankName)}-${
+      data.payment.accountNumber
+    }-compact2.png?accountName=${encodeURIComponent(data.payment.accountHolder)}`;
 
-  const openMessenger = () => {
-    track("click", "Messenger /vnecs");
-    window.open(MESSENGER_URL, "_blank", "noopener,noreferrer");
-  };
+  const vietQrLink = `https://img.vietqr.io/image/${encodeURIComponent(
+    data.payment.bankName
+  )}-${data.payment.accountNumber}-compact2.png?accountName=${encodeURIComponent(
+    data.payment.accountHolder
+  )}`;
 
-  if (!data) {
-    return (
-      <main className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg)" }}>
-        <div className="loader" />
-      </main>
-    );
-  }
-
-  const paymentQr = data.payment.qrImage || `https://img.vietqr.io/image/${encodeURIComponent(data.payment.bankName)}-${data.payment.accountNumber}-compact2.png?accountName=${encodeURIComponent(data.payment.accountHolder)}`;
-  const vietQrLink = `https://img.vietqr.io/image/${encodeURIComponent(data.payment.bankName)}-${data.payment.accountNumber}-compact2.png?accountName=${encodeURIComponent(data.payment.accountHolder)}`;
-  const canonicalBase = typeof window !== "undefined" ? window.location.origin : SITE_URL;
-
-  const toggleTheme = () => {
-    const next = isDark ? "light" : "dark";
-    setIsDark(!isDark);
-    document.documentElement.classList.toggle("light", next === "light");
-    localStorage.setItem("theme-mode", next);
-  };
-
-  const copyAccount = async () => {
-    await navigator.clipboard.writeText(data.payment.accountNumber);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
-  };
+  const canonicalBase = SITE_URL;
 
   return (
     <main className="network-shell">
+      {/* Client Analytics Trigger */}
+      <AnalyticsTracker type="pageview" label="" />
+
       <header className="network-topbar">
         <div className="network-container topbar-inner">
-          <Link href="/" className="brand-mark" aria-label={data.name}>TN</Link>
+          <Link href="/" className="brand-mark" aria-label={data.name}>
+            TN
+          </Link>
           <div className="topbar-actions">
-            <Link href="/qr" className="topbar-link topbar-link-priority" onClick={() => track("click", "QR topbar")}><Icon name="qr" /> Tạo QR</Link>
-            <Link href="/blog" className="topbar-link">Blog</Link>
-            <button className="icon-button" onClick={toggleTheme} aria-label={isDark ? "Bật giao diện sáng" : "Bật giao diện tối"}><Icon name={isDark ? "sun" : "moon"} /></button>
+            <TrackableLink href="/qr" label="QR topbar" className="topbar-link topbar-link-priority">
+              <Icon name="qr" /> Tạo QR
+            </TrackableLink>
+            <Link href="/blog" className="topbar-link">
+              Blog
+            </Link>
+            <ThemeToggle initialMode={data.theme?.mode} initialAccent={data.theme?.accent} />
           </div>
         </div>
       </header>
@@ -207,10 +217,19 @@ export default function Home() {
       <div className="network-container">
         <section className="network-profile">
           <div className="network-cover">
-            {data.cover ? <Image src={data.cover} alt="" fill sizes="1120px" className="cover-image" unoptimized /> : null}
+            {data.cover ? (
+              <Image
+                src={data.cover}
+                alt=""
+                fill
+                sizes="1120px"
+                className="cover-image object-cover"
+                unoptimized
+              />
+            ) : null}
             <div className="cover-glass">
               <span>profile://tung-nguyen</span>
-              <span>{profile.hometown}</span>
+              <span>{hometown}</span>
             </div>
           </div>
 
@@ -227,44 +246,64 @@ export default function Home() {
               <div>
                 <div className="name-with-age">
                   <h1>{data.name}</h1>
-                  <span>{profile.age} tuổi</span>
+                  <span>{age} tuổi</span>
                 </div>
                 <p>@tungnguyen · {data.tagline}</p>
               </div>
-              <button className="profile-action primary" onClick={openMessenger}>
+              <MessengerButton className="profile-action primary" label="Messenger /vnecs">
                 <Icon name="mail" />
                 Nhắn tin
-              </button>
+              </MessengerButton>
             </div>
 
             <p className="network-bio">{data.bio[0]}</p>
 
             <div className="profile-pills">
-              <span><Icon name="home" /> {profile.hometown}</span>
-              <span><Icon name="calendar" /> Sinh năm {profile.birthYear}</span>
-              <span><Icon name="heart" /> {profile.relationship}</span>
-              <span><Icon name="check" /> Đang nhận dự án</span>
+              <span>
+                <Icon name="home" /> {hometown}
+              </span>
+              <span>
+                <Icon name="calendar" /> Sinh năm {birthYear}
+              </span>
+              <span>
+                <Icon name="heart" /> {relationship}
+              </span>
+              <span>
+                <Icon name="check" /> Đang nhận dự án
+              </span>
             </div>
 
             <div className="network-socials">
               {data.socials.map((social) => (
-                <a key={social.name} href={social.href} target={social.href.startsWith("mailto:") ? undefined : "_blank"} rel="noreferrer" aria-label={social.name} onClick={() => track("click", social.name)}>
+                <TrackableLink
+                  key={social.name}
+                  href={social.href}
+                  label={social.name}
+                  isExternal
+                >
                   <SocialIcon d={SOCIAL_ICONS[social.name] || ICONS.external} />
-                </a>
+                </TrackableLink>
               ))}
             </div>
           </div>
 
           <nav className="network-tabs" aria-label="Danh mục hồ sơ">
             {[
-              ["feed", "Bảng tin"],
-              ["info", "Thông tin"],
-              ["projects", "Dự án"],
-              ["services", "Dịch vụ"],
-              ["tools", "Công cụ"],
-              ["payment", "Thanh toán"],
-            ].map(([id, label]) => (
-              <button key={id} className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id as TabType)}>{label}</button>
+              ["feed", "Bảng tin", "/"],
+              ["info", "Thông tin", "/?tab=info"],
+              ["projects", "Dự án", "/?tab=projects"],
+              ["services", "Dịch vụ", "/?tab=services"],
+              ["tools", "Công cụ", "/?tab=tools"],
+              ["payment", "Thanh toán", "/?tab=payment"],
+            ].map(([id, label, href]) => (
+              <Link
+                key={id}
+                href={href}
+                className={activeTab === id ? "active" : ""}
+                scroll={false}
+              >
+                {label}
+              </Link>
             ))}
           </nav>
         </section>
@@ -274,33 +313,45 @@ export default function Home() {
             <div className="content-grid feed-grid">
               {posts.length === 0 ? (
                 <article className="network-card empty-card">Chưa có bài viết blog nào.</article>
-              ) : posts.map((post) => {
-                const postUrl = `${canonicalBase}/blog/${post.slug}`;
-                return (
-                  <article className="network-card post-feed-card" key={post.slug}>
-                    <div className="feed-author">
-                      <span className="small-avatar">TN</span>
-                      <div>
-                        <strong>{data.name}</strong>
-                        <p>{new Date(post.createdAt).toLocaleDateString("vi-VN")}</p>
+              ) : (
+                posts.map((post) => {
+                  const postUrl = `${canonicalBase}/blog/${post.slug}`;
+                  return (
+                    <article className="network-card post-feed-card" key={post.slug}>
+                      <div className="feed-author">
+                        <span className="small-avatar">TN</span>
+                        <div>
+                          <strong>{data.name}</strong>
+                          <p>{new Date(post.createdAt).toLocaleDateString("vi-VN")}</p>
+                        </div>
                       </div>
-                    </div>
-                    {post.cover ? (
-                      <div className="safe-image-frame feed-cover-frame">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={post.cover} alt="" className="safe-image" loading="lazy" />
+                      {post.cover ? (
+                        <div className="safe-image-frame feed-cover-frame relative h-48 w-full overflow-hidden rounded-lg">
+                          <Image
+                            src={post.cover}
+                            alt=""
+                            fill
+                            className="safe-image object-cover animate-fade-in"
+                            sizes="(max-width: 768px) 100vw, 800px"
+                            unoptimized
+                          />
+                        </div>
+                      ) : null}
+                      <h2>{post.title}</h2>
+                      <p>{post.excerpt || excerpt(post.content)}</p>
+                      <div className="tag-strip">
+                        {post.tags.map((tag) => (
+                          <span key={tag}>{tag}</span>
+                        ))}
                       </div>
-                    ) : null}
-                    <h2>{post.title}</h2>
-                    <p>{post.excerpt || excerpt(post.content)}</p>
-                    <div className="tag-strip">{post.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
-                    <div className="share-row read-row">
-                      <Link href={`/blog/${post.slug}`}>Đọc bài</Link>
-                    </div>
-                    <PostEngagement slug={post.slug} title={post.title} url={postUrl} compact />
-                  </article>
-                );
-              })}
+                      <div className="share-row read-row">
+                        <Link href={`/blog/${post.slug}`}>Đọc bài</Link>
+                      </div>
+                      <PostEngagement slug={post.slug} title={post.title} url={postUrl} compact />
+                    </article>
+                  );
+                })
+              )}
             </div>
           )}
 
@@ -309,19 +360,43 @@ export default function Home() {
               <article className="network-card">
                 <h2>Thông tin cá nhân</h2>
                 <div className="info-list">
-                  <div><Icon name="user" /><span>Họ tên</span><strong>{data.name}</strong></div>
-                  <div><Icon name="calendar" /><span>Tuổi</span><strong>{profile.age} tuổi</strong></div>
-                  <div><Icon name="home" /><span>Quê quán</span><strong>{profile.hometown}</strong></div>
-                  <div><Icon name="heart" /><span>Tình trạng</span><strong>{profile.relationship}</strong></div>
+                  <div>
+                    <Icon name="user" />
+                    <span>Họ tên</span>
+                    <strong>{data.name}</strong>
+                  </div>
+                  <div>
+                    <Icon name="calendar" />
+                    <span>Tuổi</span>
+                    <strong>{age} tuổi</strong>
+                  </div>
+                  <div>
+                    <Icon name="home" />
+                    <span>Quê quán</span>
+                    <strong>{hometown}</strong>
+                  </div>
+                  <div>
+                    <Icon name="heart" />
+                    <span>Tình trạng</span>
+                    <strong>{relationship}</strong>
+                  </div>
                 </div>
               </article>
               <article className="network-card">
                 <h2>Sở thích</h2>
-                <div className="tag-strip">{profile.hobbies.map((item) => <span key={item}>{item}</span>)}</div>
+                <div className="tag-strip">
+                  {hobbies.map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
               </article>
               <article className="network-card">
                 <h2>Kỹ năng</h2>
-                <div className="tag-strip">{data.skills.map((skill) => <span key={skill}>{skill}</span>)}</div>
+                <div className="tag-strip">
+                  {data.skills.map((skill) => (
+                    <span key={skill}>{skill}</span>
+                  ))}
+                </div>
               </article>
             </div>
           )}
@@ -332,19 +407,46 @@ export default function Home() {
                 const projectUrl = project.href || `${canonicalBase}/?tab=projects`;
                 return (
                   <article className="network-card project-card" key={project.name}>
-                    {project.image ? <Image src={project.image} alt="" width={720} height={360} className="project-image" /> : <div className="project-placeholder"><Icon name="briefcase" /></div>}
+                    {project.image ? (
+                      <Image
+                        src={project.image}
+                        alt=""
+                        width={720}
+                        height={360}
+                        className="project-image object-cover"
+                      />
+                    ) : (
+                      <div className="project-placeholder">
+                        <Icon name="briefcase" />
+                      </div>
+                    )}
                     <div className="card-heading">
                       <div>
                         <h2>{project.name}</h2>
                         <p>{project.status}</p>
                       </div>
-                      {project.href ? <a href={project.href} target="_blank" rel="noreferrer" aria-label="Mở dự án"><Icon name="external" /></a> : null}
+                      {project.href ? (
+                        <a
+                          href={project.href}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label="Mở dự án"
+                        >
+                          <Icon name="external" />
+                        </a>
+                      ) : null}
                     </div>
                     <p>{project.desc}</p>
-                    <div className="tag-strip">{project.tech.map((tech) => <span key={tech}>{tech}</span>)}</div>
+                    <div className="tag-strip">
+                      {project.tech.map((tech) => (
+                        <span key={tech}>{tech}</span>
+                      ))}
+                    </div>
                     <div className="share-row">
                       {shareLinks(projectUrl, project.name).map((item) => (
-                        <a key={item.label} href={item.href} target="_blank" rel="noreferrer">{item.label}</a>
+                        <a key={item.label} href={item.href} target="_blank" rel="noreferrer">
+                          {item.label}
+                        </a>
                       ))}
                     </div>
                   </article>
@@ -359,7 +461,15 @@ export default function Home() {
                 const serviceUrl = service.href || `${canonicalBase}/?tab=services`;
                 return (
                   <article className="network-card service-social-card" key={service.name}>
-                    {service.image ? <Image src={service.image} alt="" width={720} height={280} className="project-image" /> : null}
+                    {service.image ? (
+                      <Image
+                        src={service.image}
+                        alt=""
+                        width={720}
+                        height={280}
+                        className="project-image object-cover"
+                      />
+                    ) : null}
                     <div className="service-title">
                       <span>{service.icon}</span>
                       <div>
@@ -369,11 +479,19 @@ export default function Home() {
                     </div>
                     <p>{service.desc}</p>
                     <div className="share-row">
-                      <button onClick={openMessenger}>Liên hệ</button>
-                      {service.href ? <a href={service.href} target="_blank" rel="noreferrer">Chi tiết</a> : null}
-                      {shareLinks(serviceUrl, service.name).slice(0, 3).map((item) => (
-                        <a key={item.label} href={item.href} target="_blank" rel="noreferrer">{item.label}</a>
-                      ))}
+                      <MessengerButton label={`Liên hệ ${service.name}`}>Liên hệ</MessengerButton>
+                      {service.href ? (
+                        <a href={service.href} target="_blank" rel="noreferrer">
+                          Chi tiết
+                        </a>
+                      ) : null}
+                      {shareLinks(serviceUrl, service.name)
+                        .slice(0, 3)
+                        .map((item) => (
+                          <a key={item.label} href={item.href} target="_blank" rel="noreferrer">
+                            {item.label}
+                          </a>
+                        ))}
                     </div>
                   </article>
                 );
@@ -385,28 +503,44 @@ export default function Home() {
             <div className="content-grid tools-grid">
               <article className="network-card qr-tool-card">
                 <div className="qr-tool-copy">
-                  <span className="tool-kicker"><Icon name="qr" /> Public QR Studio</span>
+                  <span className="tool-kicker">
+                    <Icon name="qr" /> Public QR Studio
+                  </span>
                   <h2>QR cho mọi người</h2>
                   <p>URL, Wi-Fi, vCard, VietQR, SMS, email và scanner ảnh/camera.</p>
                   <div className="tag-strip">
-                    {['URL', 'Wi-Fi', 'vCard', 'VietQR', 'SMS', 'Email'].map((item) => <span key={item}>{item}</span>)}
+                    {["URL", "Wi-Fi", "vCard", "VietQR", "SMS", "Email"].map((item) => (
+                      <span key={item}>{item}</span>
+                    ))}
                   </div>
                   <div className="share-row">
-                    <Link href="/qr" onClick={() => track("click", "Open public QR generator")}><Icon name="qr" /> Tạo QR</Link>
-                    <Link href="/qr?mode=scan" onClick={() => track("click", "Open public QR scanner")}>Quét QR</Link>
+                    <TrackableLink href="/qr" label="Open public QR generator">
+                      <Icon name="qr" /> Tạo QR
+                    </TrackableLink>
+                    <TrackableLink href="/qr?mode=scan" label="Open public QR scanner">
+                      Quét QR
+                    </TrackableLink>
                   </div>
                 </div>
                 <div className="qr-mini" aria-hidden="true">
-                  {Array.from({ length: 49 }, (_, index) => <span key={index} />)}
+                  {Array.from({ length: 49 }, (_, index) => (
+                    <span key={index} />
+                  ))}
                 </div>
               </article>
 
               <article className="network-card tool-note-card">
                 <h2>Không cần đăng nhập</h2>
-                <p>Lịch sử lưu trong trình duyệt của người dùng; phần camera chỉ chạy khi họ cấp quyền.</p>
+                <p>
+                  Lịch sử lưu trong trình duyệt của người dùng; phần camera chỉ chạy khi họ cấp quyền.
+                </p>
                 <div className="share-row">
-                  <Link href="/qr?type=vietqr" onClick={() => track("click", "Open public VietQR")}>VietQR</Link>
-                  <Link href="/qr?type=wifi" onClick={() => track("click", "Open public Wi-Fi QR")}>Wi-Fi QR</Link>
+                  <TrackableLink href="/qr?type=vietqr" label="Open public VietQR">
+                    VietQR
+                  </TrackableLink>
+                  <TrackableLink href="/qr?type=wifi" label="Open public Wi-Fi QR">
+                    Wi-Fi QR
+                  </TrackableLink>
                 </div>
               </article>
             </div>
@@ -416,17 +550,36 @@ export default function Home() {
             <div className="content-grid payment-grid">
               <article className="network-card payment-card">
                 <h2>Thông tin thanh toán</h2>
-                <div className="payment-qr">
-                  <Image src={paymentQr} alt="VietQR" width={260} height={260} />
+                <div className="payment-qr flex justify-center py-2">
+                  <Image src={paymentQr} alt="VietQR" width={260} height={260} unoptimized />
                 </div>
                 <div className="info-list">
-                  <div><Icon name="bank" /><span>Ngân hàng</span><strong>{data.payment.bankName}</strong></div>
-                  <div><Icon name="wallet" /><span>Số tài khoản</span><strong>{data.payment.accountNumber}</strong></div>
-                  <div><Icon name="user" /><span>Chủ tài khoản</span><strong>{data.payment.accountHolder}</strong></div>
+                  <div>
+                    <Icon name="bank" />
+                    <span>Ngân hàng</span>
+                    <strong>{data.payment.bankName}</strong>
+                  </div>
+                  <div>
+                    <Icon name="wallet" />
+                    <span>Số tài khoản</span>
+                    <strong>{data.payment.accountNumber}</strong>
+                  </div>
+                  <div>
+                    <Icon name="user" />
+                    <span>Chủ tài khoản</span>
+                    <strong>{data.payment.accountHolder}</strong>
+                  </div>
                 </div>
                 <div className="share-row">
-                  <button onClick={copyAccount}><Icon name="copy" /> {copied ? "Đã sao chép" : "Sao chép STK"}</button>
-                  <a href={vietQrLink} target="_blank" rel="noreferrer">Mở VietQR</a>
+                  <CopyButton
+                    textToCopy={data.payment.accountNumber}
+                    className="flex items-center gap-1 bg-white/[0.04] px-4 py-2 rounded-lg border border-white/[0.08] hover:bg-white/[0.08]"
+                    label="Sao chép STK"
+                    copiedLabel="Đã sao chép"
+                  />
+                  <a href={vietQrLink} target="_blank" rel="noreferrer">
+                    Mở VietQR
+                  </a>
                 </div>
               </article>
             </div>

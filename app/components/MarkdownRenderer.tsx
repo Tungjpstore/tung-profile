@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 
 interface MarkdownRendererProps {
   content: string;
@@ -111,8 +112,14 @@ export default function MarkdownRenderer({ content, compact = false }: MarkdownR
       if (image) {
         blocks.push(
           <figure key={blocks.length}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image[2]} alt={image[1]} />
+            <Image
+              src={image[2]}
+              alt={image[1] || "Blog Image"}
+              width={800}
+              height={450}
+              className="rounded-2xl max-w-full h-auto mx-auto object-cover border border-white/5"
+              unoptimized
+            />
             {image[1] ? <figcaption>{image[1]}</figcaption> : null}
           </figure>
         );

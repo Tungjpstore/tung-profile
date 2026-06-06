@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 
 /* ─── Typing effect hook ─── */
 function useTypingEffect(words: string[], typingSpeed = 80, deletingSpeed = 50, pauseTime = 2000) {
@@ -151,10 +152,13 @@ export default function HeroSection() {
         <div className="relative w-36 h-36 mx-auto mb-10">
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-600/30 blur-2xl animate-pulse-glow" />
           <div className="absolute -inset-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 opacity-20 animate-spin-slow" style={{ borderRadius: "60% 40% 30% 70% / 60% 30% 70% 40%", animation: "morph 8s ease-in-out infinite, spin-slow 20s linear infinite" }} />
-          <img
+          <Image
             src="https://i.pravatar.cc/300"
             alt="Tùng Nguyễn"
+            width={144}
+            height={144}
             className="relative w-36 h-36 rounded-full object-cover border-2 border-white/20 shadow-2xl z-10"
+            unoptimized
           />
           {/* Orbiting dots */}
           <div className="absolute inset-0 animate-orbit">
