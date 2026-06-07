@@ -1,14 +1,27 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import bcrypt from "bcryptjs";
 import { SignJWT } from "jose";
+import path from "path";
+import os from "os";
+import { readJsonFromStorage } from "../../../lib/storage-helper";
 
-const AUTH_PATH = path.join(process.cwd(), "data", "auth.json");
-
-function getAuth() {
-  return JSON.parse(fs.readFileSync(AUTH_PATH, "utf-8"));
+interface AuthData {
+  passwordHash: string;
+  jwtSecret: string;
 }
+
+const authKeys = {
+  r2Key: "data/auth.json",
+  blobPath: "data/auth.json",
+  kvKey: "tung-profile:auth",
+  filePath: path.join(process.cwd(), "data", "auth.json"),
+  runtimePath: path.join(os.tmpdir(), "tung-profile-data", "auth.json"),
+};
+
+const defaultAuth: AuthData = {
+  passwordHash: "$2b$10$ivR5Ty6vIRfibYiy5suavunNap1lWdUUb9WKhRSWwH6CYuJs/0FRi",
+  jwtSecret: "tung-profile-secret-key-2026-change-me",
+};
 
 export async function POST(request: Request) {
   try {
@@ -17,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Vui lòng nhập mật khẩu" }, { status: 400 });
     }
 
-    const auth = getAuth();
+    const auth = await readJsonFromStorage<AuthData>(authKeys, defaultAuth);
     const valid = await bcrypt.compare(password, auth.passwordHash);
 
     if (!valid) {
@@ -42,7 +55,8 @@ export async function POST(request: Request) {
     });
 
     return res;
-  } catch {
+  } catch (err) {
+    console.error("Login error:", err);
     return NextResponse.json({ error: "Lỗi đăng nhập" }, { status: 500 });
   }
 }

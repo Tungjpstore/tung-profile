@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import bcrypt from "bcryptjs";
+import path from "path";
+import os from "os";
+import { readJsonFromStorage, writeJsonToStorage } from "../../../lib/storage-helper";
 
-const AUTH_PATH = path.join(process.cwd(), "data", "auth.json");
-
-function getAuth() {
-  return JSON.parse(fs.readFileSync(AUTH_PATH, "utf-8"));
+interface AuthData {
+  passwordHash: string;
+  jwtSecret: string;
 }
 
-function writeAuth(data: unknown) {
-  fs.writeFileSync(AUTH_PATH, JSON.stringify(data, null, 2), "utf-8");
-}
+const authKeys = {
+  r2Key: "data/auth.json",
+  blobPath: "data/auth.json",
+  kvKey: "tung-profile:auth",
+  filePath: path.join(process.cwd(), "data", "auth.json"),
+  runtimePath: path.join(os.tmpdir(), "tung-profile-data", "auth.json"),
+};
+
+const defaultAuth: AuthData = {
+  passwordHash: "$2b$10$ivR5Ty6vIRfibYiy5suavunNap1lWdUUb9WKhRSWwH6CYuJs/0FRi",
+  jwtSecret: "tung-profile-secret-key-2026-change-me",
+};
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Mật khẩu mới phải từ 6 ký tự trở lên" }, { status: 400 });
     }
 
-    const auth = getAuth();
+    const auth = await readJsonFromStorage<AuthData>(authKeys, defaultAuth);
     const valid = await bcrypt.compare(currentPassword, auth.passwordHash);
 
     if (!valid) {
@@ -39,20 +48,18 @@ export async function POST(request: Request) {
     // Update the auth credentials
     auth.passwordHash = newHash;
 
-    try {
-      writeAuth(auth);
-    } catch {
-      return NextResponse.json(
-        {
-          error: "Không thể lưu mật khẩu vào hệ thống tệp tin.",
-          warning: "Vui lòng cập nhật mật khẩu thủ công trong data/auth.json trên môi trường Vercel production.",
-        },
-        { status: 500 }
-      );
+    const storageResult = await writeJsonToStorage(authKeys, auth);
+
+    if (storageResult.mode === "runtime" || !storageResult.persistent) {
+      return NextResponse.json({
+        success: true,
+        warning: storageResult.warning || "Mật khẩu đã đổi tạm thời trên runtime. Cấu hình R2/Blob/KV để lưu trữ lâu dài.",
+      });
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    console.error("Change password error:", err);
     return NextResponse.json({ error: "Đổi mật khẩu thất bại" }, { status: 500 });
   }
 }
